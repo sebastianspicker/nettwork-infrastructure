@@ -1,0 +1,5 @@
+#include "Base.xcconfig"
+
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+NETTWORK_APNS_ENVIRONMENT = development
+NETTWORK_CLOUDKIT_ENVIRONMENT = Development

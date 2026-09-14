@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Nettwork representative mock-data workbench demo." />
+    <link rel="icon" href="assets/nettwork-icon-master.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Nettwork workbench demo</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#workspace" aria-label="Nettwork demo home"
+          ><img src="assets/nettwork-icon-master.png" alt="" /><span>Nettwork</span><small>DEMO</small></a
+        >
+        <div class="context-bar">
+          <div class="context-title">
+            <h1 id="location-title">Rack B04</h1>
+            <p id="location-path">Berlin Campus · Building A · Level 2 · Server Room B04</p>
+          </div>
+          <div class="search-region">
+            <label class="search-field" for="global-search"
+              ><span class="sr-only">Search representative demo assets, locations, or addresses</span
+              ><svg aria-hidden="true"><use href="#i-search"></use></svg
+              ><input
+                id="global-search"
+                type="search"
+                autocomplete="off"
+                placeholder="Search demo assets or addresses"
+              /><kbd>⌘K</kbd></label
+            >
+            <div id="search-results" class="search-results" hidden></div>
+          </div>
+          <div class="top-actions">
+            <button id="sync-button" class="sync-button" type="button">
+              <span class="sync-symbol" aria-hidden="true">↻</span><span id="sync-label">Demo data · synced</span>
+            </button>
+            <button
+              id="sidebar-toggle"
+              class="icon-button mobile-only"
+              type="button"
+              aria-label="Open locations and objects"
+              aria-expanded="false"
+            >
+              <svg aria-hidden="true"><use href="#i-panel"></use></svg>
+            </button>
+            <button id="search-toggle" class="icon-button mobile-only" type="button" aria-label="Open search">
+              <svg aria-hidden="true"><use href="#i-search"></use></svg>
+            </button>
+            <button id="theme-toggle" class="icon-button" type="button" aria-label="Use dark theme">
+              <svg aria-hidden="true"><use href="#i-moon"></use></svg>
+            </button>
+          </div>
+        </div>
+        <div class="inspector-heading">
+          <span>Inspector</span
+          ><button
+            id="inspector-toggle"
+            class="icon-button"
+            type="button"
+            aria-label="Toggle inspector"
+            aria-expanded="true"
+          >
+            <svg aria-hidden="true"><use href="#i-panel"></use></svg>
+          </button>
+        </div>
+      </header>
+
+      <nav class="sidebar" aria-label="Locations and objects">
+        <p class="demo-notice">Representative mock data. No live network, camera, or cloud connection.</p>
+        <section>
+          <h2>Location</h2>
+          <div id="location-tree" class="tree"></div>
+        </section>
+        <section>
+          <h2>In this room</h2>
+          <div id="room-objects" class="tree"></div>
+        </section>
+        <section>
+          <h2>Favorites</h2>
+          <div id="favorites" class="tree"></div>
+        </section>
+        <section>
+          <h2>Work orders</h2>
+          <button class="nav-row" id="work-order-nav" type="button">
+            <span class="row-icon">▣</span><span>Open work</span><span class="count-badge">3</span>
+          </button>
+        </section>
+      </nav>
+
+      <main id="workspace" class="workspace" tabindex="-1">
+        <div class="modebar">
+          <div class="tabs" role="tablist" aria-label="Workbench views">
+            <button
+              class="tab"
+              id="tab-overview"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="view-panel"
+              tabindex="-1"
+            >
+              Overview
+            </button>
+            <button
+              class="tab"
+              id="tab-physical"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="view-panel"
+              tabindex="-1"
+            >
+              Physical
+            </button>
+            <button
+              class="tab"
+              id="tab-logical"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="view-panel"
+              tabindex="-1"
+            >
+              Logical
+            </button>
+            <button class="tab" id="tab-trace" type="button" role="tab" aria-selected="true" aria-controls="view-panel">
+              Trace
+            </button>
+            <button
+              class="tab"
+              id="tab-history"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="view-panel"
+              tabindex="-1"
+            >
+              History
+            </button>
+          </div>
+          <div class="view-actions">
+            <button id="new-trace" class="quiet-button" type="button">New demo trace</button
+            ><button id="reverse-path" class="quiet-button" type="button">Reverse</button
+            ><button
+              id="mobile-inspector"
+              class="icon-button mobile-only"
+              type="button"
+              aria-label="Show selected object inspector"
+            >
+              <svg aria-hidden="true"><use href="#i-info"></use></svg>
+            </button>
+          </div>
+        </div>
+        <section id="view-panel" class="view-panel" role="tabpanel" aria-labelledby="tab-trace"></section>
+      </main>
+
+      <aside class="inspector" id="inspector" aria-label="Selected object inspector">
+        <div id="inspector-content"></div>
+      </aside>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-atomic="true">
+      <span aria-hidden="true">✓</span><span id="toast-text"></span>
+    </div>
+    <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+    <svg class="sprite" aria-hidden="true">
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7"></circle>
+        <path d="m20 20-4-4"></path>
+      </symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24">
+        <path d="M20 15.2A8.5 8.5 0 0 1 8.8 4 8.5 8.5 0 1 0 20 15.2Z"></path>
+      </symbol>
+      <symbol id="i-panel" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+        <path d="M15 4v16"></path>
+      </symbol>
+      <symbol id="i-info" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9"></circle>
+        <path d="M12 11v5M12 8h.01"></path>
+      </symbol>
+      <symbol id="i-server" viewBox="0 0 24 24">
+        <rect x="4" y="3" width="16" height="7" rx="2"></rect>
+        <rect x="4" y="14" width="16" height="7" rx="2"></rect>
+        <path d="M8 6h.01M8 17h.01"></path>
+      </symbol>
+      <symbol id="i-rack" viewBox="0 0 24 24">
+        <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+        <path d="M6 9h12M6 13h12M8 16h.01M11 16h.01M14 16h.01M17 16h.01"></path>
+      </symbol>
+      <symbol id="i-laptop" viewBox="0 0 24 24">
+        <rect x="5" y="4" width="14" height="11" rx="1"></rect>
+        <path d="M3 19h18M8 19l1-2h6l1 2"></path>
+      </symbol>
+      <symbol id="i-outlet" viewBox="0 0 24 24">
+        <rect x="4" y="3" width="16" height="18" rx="4"></rect>
+        <path d="M9 9v3M15 9v3M9 16h6"></path>
+      </symbol>
+      <symbol id="i-switch" viewBox="0 0 24 24"><path d="M4 8h14l-3-3M20 16H6l3 3"></path></symbol>
+      <symbol id="i-building" viewBox="0 0 24 24">
+        <path d="M5 21V4h10v17M15 9h4v12M8 7h3M8 11h3M8 15h3M3 21h18"></path>
+      </symbol>
+      <symbol id="i-work" viewBox="0 0 24 24">
+        <rect x="3" y="7" width="18" height="13" rx="2"></rect>
+        <path d="M9 7V4h6v3M3 12h18"></path>
+      </symbol>
+    </svg>
+    <script src="mock-data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

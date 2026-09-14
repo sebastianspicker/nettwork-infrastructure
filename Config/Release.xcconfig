@@ -1,0 +1,5 @@
+#include "Base.xcconfig"
+
+SWIFT_OPTIMIZATION_LEVEL = -O
+NETTWORK_APNS_ENVIRONMENT = production
+NETTWORK_CLOUDKIT_ENVIRONMENT = Production

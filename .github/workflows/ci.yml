@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Select full Xcode toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          full_xcode_developer_dir=""
+
+          if [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+            full_xcode_developer_dir="/Applications/Xcode.app/Contents/Developer"
+          else
+            for candidate in /Applications/Xcode*.app/Contents/Developer; do
+              if [[ -d "$candidate" ]]; then
+                full_xcode_developer_dir="$candidate"
+              fi
+            done
+          fi
+
+          if [[ -n "$full_xcode_developer_dir" ]]; then
+            sudo xcode-select --switch "$full_xcode_developer_dir"
+          fi
+
+          xcode-select --print-path
+          xcodebuild -version
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install locked Node tooling
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install shell analyzers and XcodeGen
+        run: brew install shellcheck shfmt xcodegen
+
+      - name: Verify source
+        run: make verify-source
+
+      - name: Test NettworkCore package
+        run: make verify-package
+
+      - name: Test macOS app and build iOS Simulator app
+        run: make verify-native

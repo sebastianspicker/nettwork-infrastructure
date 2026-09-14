@@ -1,0 +1,15 @@
+// Signing, development team, and the iCloud container must be set by the
+// organization in Xcode or CI. These defaults intentionally do not claim a
+// provisioned CloudKit environment.
+
+PRODUCT_NAME = Nettwork
+SWIFT_VERSION = 6.0
+SWIFT_STRICT_CONCURRENCY = complete
+SWIFT_TREAT_WARNINGS_AS_ERRORS = YES
+GENERATE_INFOPLIST_FILE = NO
+
+NETTWORK_ICLOUD_CONTAINER = iCloud.com.example.nettwork
+
+// Organization builds must inject an NSObject-backed provider class name.
+// Leaving this empty intentionally keeps the application fail-closed.
+NETTWORK_PRODUCTION_CONFIGURATION_PROVIDER =
