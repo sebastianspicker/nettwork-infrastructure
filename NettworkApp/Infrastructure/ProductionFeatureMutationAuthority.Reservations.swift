@@ -1,5 +1,6 @@
 import CloudSync
 import CryptoKit
+import FeatureContracts
 import Foundation
 import NetworkModel
 import WorkspaceChangeControl

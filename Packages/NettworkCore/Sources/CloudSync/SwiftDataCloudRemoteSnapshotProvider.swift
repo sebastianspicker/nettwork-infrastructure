@@ -3,11 +3,6 @@ import NetworkModel
 import Persistence
 import WorkspaceChangeControl
 
-public enum CloudRemoteReferenceValidators {
-    /// Use this in production `SwiftDataCloudMirrorStore` composition.
-    public static let production = CompositeCloudRemoteReferenceValidator()
-}
-
 /// Builds a candidate-scoped view from V9 indexes. A generic protocol caller
 /// receives an intentionally incomplete empty snapshot; production calls the
 /// overload below with the actual candidate and therefore never enumerates a

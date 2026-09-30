@@ -1,5 +1,6 @@
 import CloudSync
 import ContentSafety
+import FeatureContracts
 import Foundation
 import ImportExport
 import NetworkModel
@@ -15,7 +16,7 @@ struct ProductionFeatureGraphInput {
     let mutations: any ProductionFeatureMutationAuthorizing
     let synchronizer: any ProductionForegroundSynchronizing
     let workspaceAccess: any ProductionWorkspaceAccessReading
-    let administration: any WorkspaceAdministrationModel
+    let administration: any WorkspaceAdministrationService
     let telemetryExternalSignalProvider: any PrivacySafeSyncTelemetryExternalSignalProviding
     let floorPlanService: any FloorPlanFeatureService
     let transferService: any TransferFeatureService

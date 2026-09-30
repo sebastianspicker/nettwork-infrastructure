@@ -1,3 +1,4 @@
+import FeatureContracts
 import Foundation
 import ImportExport
 import NetworkModel
@@ -5,112 +6,11 @@ import Observation
 import SwiftUI
 import WorkspaceChangeControl
 
-enum TemplateAdministrationPolicy: Equatable, Sendable {
-    case allowed
-    case readOnly
-    case denied(String)
-}
-
-struct TemplateCatalogItem: Identifiable, Equatable, Sendable {
-    let id: ObjectID
-    let name: String
-    let version: Int
-    let portCount: Int
-    let moduleCount: Int
-    let validationSummary: String
-}
-
-struct TemplateMigrationImpactSnapshot: Identifiable, Equatable, Sendable {
-    let id: ObjectID
-    let action: TemplatePortMigrationAction
-    let requiresCableReview: Bool
-    let explanation: String
-}
-
-struct TemplateChangeRequest: Equatable, Sendable {
-    let title: String
-    let ticketID: String
-    let notes: String
-    /// The complete immutable target, including its version and field schema.
-    let targetTemplate: DeviceType
-    let requestKind: RequestKind
-
-    enum RequestKind: Equatable, Sendable {
-        case create
-        case clone(sourceTemplateID: ObjectID)
-        case newVersion(sourceTemplateID: ObjectID)
-        /// The instantiation result is complete and immutable before it enters
-        /// the work-order lifecycle; the UI never stages a generic device op.
-        case instantiate(DeviceInstantiation)
-        /// Decisions include both snapshots, preventing later catalog changes
-        /// from altering an already-reviewed migration request.
-        case migration(plans: [DeviceTemplateMigrationPlan])
-    }
-}
-
-struct ModuleTemplateChangeRequest: Equatable, Sendable {
-    let title: String
-    let ticketID: String
-    let notes: String
-    let targetTemplate: ModuleTemplate
-    let requestKind: RequestKind
-
-    enum RequestKind: Equatable, Sendable {
-        case create
-        case clone(sourceTemplateID: ObjectID)
-        case newVersion(sourceTemplateID: ObjectID)
-    }
-}
-
-enum TemplateCatalogQueryError: LocalizedError, Sendable {
-    case detailUnavailable
-    case migrationPlanningUnavailable
-
-    var errorDescription: String? {
-        switch self {
-        case .detailUnavailable: "The selected template's complete definition is not available."
-        case .migrationPlanningUnavailable: "Detailed migration plans are not available."
-        }
-    }
-}
-
-protocol TemplateCatalogQuerying: Sendable {
-    func catalog(in namespace: PersistenceNamespace) async throws -> [TemplateCatalogItem]
-    func migrationImpact(templateID: ObjectID, in namespace: PersistenceNamespace) async throws -> [TemplateMigrationImpactSnapshot]
-    func template(id: ObjectID, in namespace: PersistenceNamespace) async throws -> DeviceType
-    func migrationPlans(templateID: ObjectID, in namespace: PersistenceNamespace) async throws -> [DeviceTemplateMigrationPlan]
-    func moduleTemplates(in namespace: PersistenceNamespace) async throws -> [ModuleTemplate]
-}
-
-extension TemplateCatalogQuerying {
-    // These compatibility defaults make unavailable detail explicit rather
-    // than fabricating an editable template from a catalog summary.
-    func template(id: ObjectID, in namespace: PersistenceNamespace) async throws -> DeviceType {
-        throw TemplateCatalogQueryError.detailUnavailable
-    }
-
-    func migrationPlans(templateID: ObjectID, in namespace: PersistenceNamespace) async throws -> [DeviceTemplateMigrationPlan] {
-        throw TemplateCatalogQueryError.migrationPlanningUnavailable
-    }
-
-    func moduleTemplates(in namespace: PersistenceNamespace) async throws -> [ModuleTemplate] { [] }
-}
-
-protocol TemplateChangeRequesting: Sendable {
-    /// Staging is the only mutation boundary for every template action.
-    func stage(_ request: TemplateChangeRequest, in namespace: PersistenceNamespace) async throws -> ObjectID
-    func stage(_ request: ModuleTemplateChangeRequest, in namespace: PersistenceNamespace) async throws -> ObjectID
-}
-
-extension TemplateChangeRequesting {
-    func stage(_ request: ModuleTemplateChangeRequest, in namespace: PersistenceNamespace) async throws -> ObjectID {
-        throw TemplateCatalogQueryError.detailUnavailable
-    }
-}
-
 @MainActor
 @Observable
 final class TemplateCatalogModel {
+    private var loadGeneration: UInt64 = 0
+    private var detailGeneration: UInt64 = 0
     private let query: any TemplateCatalogQuerying
     private let requests: any TemplateChangeRequesting
     private let account: AccountContext
@@ -154,52 +54,73 @@ final class TemplateCatalogModel {
     }
 
     func load() async {
+        guard !Task.isCancelled else { return }
+        loadGeneration &+= 1
+        let generation = loadGeneration
         do {
             async let catalog = query.catalog(in: account.namespace)
             async let modules = query.moduleTemplates(in: account.namespace)
-            items = try await catalog
-            moduleTemplates = try await modules
+            let loaded = try await (catalog, modules)
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            items = loaded.0
+            moduleTemplates = loaded.1
             state = items.isEmpty ? .empty : .ready
         } catch is CancellationError {
             return
         } catch {
+            guard generation == loadGeneration, !Task.isCancelled else { return }
             state = .offline("Template catalog is unavailable offline.")
         }
     }
 
     func loadDetails(for id: ObjectID) async {
+        guard !Task.isCancelled else { return }
+        detailGeneration &+= 1
+        let generation = detailGeneration
         selectedTemplate = nil
         impacts = []
         migrationPlans = []
         detailMessage = nil
 
-        async let templateResult = query.template(id: id, in: account.namespace)
-        async let impactResult = query.migrationImpact(templateID: id, in: account.namespace)
-        async let planResult = query.migrationPlans(templateID: id, in: account.namespace)
+        let query = self.query
+        let namespace = account.namespace
+        async let templateResult = Self.readDetail { try await query.template(id: id, in: namespace) }
+        async let impactResult = Self.readDetail { try await query.migrationImpact(templateID: id, in: namespace) }
+        async let planResult = Self.readDetail { try await query.migrationPlans(templateID: id, in: namespace) }
 
-        do {
-            selectedTemplate = try await templateResult
-        } catch is CancellationError {
+        guard publishDetail(await templateResult, generation: generation, message: { $0.localizedDescription }, update: { selectedTemplate = $0 }) else {
             return
-        } catch {
-            detailMessage = error.localizedDescription
         }
+        guard publishDetail(await impactResult, generation: generation, message: { _ in "Migration impact could not be loaded." }, update: { impacts = $0 })
+        else {
+            return
+        }
+        _ = publishDetail(await planResult, generation: generation, message: { $0.localizedDescription }, update: { migrationPlans = $0 })
+    }
 
+    nonisolated private static func readDetail<Value: Sendable>(
+        _ operation: @Sendable () async throws -> Value
+    ) async -> Result<Value, any Error> {
         do {
-            impacts = try await impactResult
-        } catch is CancellationError {
-            return
+            return .success(try await operation())
         } catch {
-            detailMessage = detailMessage ?? "Migration impact could not be loaded."
+            return .failure(error)
         }
+    }
 
-        do {
-            migrationPlans = try await planResult
-        } catch is CancellationError {
-            return
-        } catch {
-            detailMessage = detailMessage ?? error.localizedDescription
+    private func publishDetail<Value>(
+        _ result: Result<Value, any Error>, generation: UInt64,
+        message: (any Error) -> String, update: (Value) -> Void
+    ) -> Bool {
+        guard generation == detailGeneration, !Task.isCancelled else { return false }
+        switch result {
+        case .success(let value):
+            update(value)
+        case .failure(let error):
+            guard !(error is CancellationError) else { return false }
+            detailMessage = detailMessage ?? message(error)
         }
+        return true
     }
 
     @discardableResult

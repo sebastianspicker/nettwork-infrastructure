@@ -1,19 +1,10 @@
 import Foundation
 import ImportExport
-import SwiftUI
-import UniformTypeIdentifiers
-
-extension UTType {
-    /// A directory package. The visible filename is supplied by the export UI
-    /// with the `.nettworkarchive` extension.
-    static let nettworkArchive = UTType(exportedAs: "com.example.nettwork.archive", conformingTo: .package)
-}
 
 enum ProductionArchiveDocumentAdapterError: LocalizedError {
     case invalidPackage
     case inaccessiblePackage
     case unsafePackageEntry(String)
-    case invalidExportDocument
 
     var errorDescription: String? {
         switch self {
@@ -23,89 +14,7 @@ enum ProductionArchiveDocumentAdapterError: LocalizedError {
             "The selected archive is no longer available to the app."
         case .unsafePackageEntry(let path):
             "The selected archive contains an unsafe entry: \(path)."
-        case .invalidExportDocument:
-            "The verified archive could not be represented as a directory package."
         }
-    }
-}
-
-/// A FileDocument writer for the already-verified core export document. It
-/// creates only package directories required to hold the document's entries;
-/// it never expands an external archive or synthesizes another payload.
-struct NettworkArchiveDocument: FileDocument, @unchecked Sendable {
-    static var readableContentTypes: [UTType] { [.nettworkArchive] }
-    static var writableContentTypes: [UTType] { [.nettworkArchive] }
-
-    private let package: FileWrapper
-
-    init(exportDocument: ArchiveExportDocument) throws {
-        package = try Self.packageWrapper(for: exportDocument.entries)
-    }
-
-    init(configuration: ReadConfiguration) throws {
-        guard configuration.file.isDirectory else {
-            throw ProductionArchiveDocumentAdapterError.invalidPackage
-        }
-        package = configuration.file
-    }
-
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        package
-    }
-
-    private static func packageWrapper(for entries: [String: Data]) throws -> FileWrapper {
-        guard entries.count <= ArchiveSafetyLimits.maximumEntries else {
-            throw ArchiveValidationError.archiveTooLarge
-        }
-
-        let root = FileWrapper(directoryWithFileWrappers: [:])
-        var collisionKeys = Set<String>()
-        var totalBytes = 0
-
-        for (rawPath, bytes) in entries.sorted(by: { $0.key < $1.key }) {
-            let path = try ArchivePathPolicy.normalized(rawPath)
-            guard ArchivePathPolicy.isAllowed(path, kind: .regularFile),
-                collisionKeys.insert(ArchivePathPolicy.collisionKey(path)).inserted,
-                bytes.count <= ArchiveSafetyLimits.maximumEntryBytes,
-                totalBytes <= ArchiveSafetyLimits.maximumExpandedBytes - bytes.count
-            else {
-                throw ProductionArchiveDocumentAdapterError.invalidExportDocument
-            }
-            totalBytes += bytes.count
-            try addFile(bytes, at: path, to: root)
-        }
-
-        return root
-    }
-
-    private static func addFile(_ bytes: Data, at path: String, to root: FileWrapper) throws {
-        let components = path.split(separator: "/").map(String.init)
-        guard let filename = components.last else {
-            throw ProductionArchiveDocumentAdapterError.invalidExportDocument
-        }
-
-        var directory = root
-        for component in components.dropLast() {
-            if let existing = directory.fileWrappers?[component] {
-                guard existing.isDirectory else {
-                    throw ProductionArchiveDocumentAdapterError.invalidExportDocument
-                }
-                directory = existing
-                continue
-            }
-
-            let child = FileWrapper(directoryWithFileWrappers: [:])
-            child.preferredFilename = component
-            directory.addFileWrapper(child)
-            directory = child
-        }
-
-        guard directory.fileWrappers?[filename] == nil else {
-            throw ProductionArchiveDocumentAdapterError.invalidExportDocument
-        }
-        let file = FileWrapper(regularFileWithContents: bytes)
-        file.preferredFilename = filename
-        directory.addFileWrapper(file)
     }
 }
 

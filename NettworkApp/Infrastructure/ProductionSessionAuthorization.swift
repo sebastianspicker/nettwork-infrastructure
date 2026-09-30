@@ -1,5 +1,6 @@
 import CloudSync
 import ContentSafety
+import FeatureContracts
 import Foundation
 import NetworkModel
 import WorkspaceChangeControl

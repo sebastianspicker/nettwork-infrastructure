@@ -92,14 +92,6 @@ extension SwiftDataPersistenceStore {
         }
     }
 
-    /// Compatibility spelling for callers that predate the V8 derived graph.
-    public func rebuildInventorySearchIndex(in namespace: PersistenceNamespace) throws {
-        try transaction {
-            try validateActiveLease(for: namespace)
-            try rebuildInventorySearchIndexLocked(in: namespace)
-        }
-    }
-
     public func workspaceVisibilityState(in namespace: PersistenceNamespace) throws -> LocalWorkspaceVisibilityState {
         try validateActiveLease(for: namespace)
         let key = PersistenceNamespaceKey.value(for: namespace)

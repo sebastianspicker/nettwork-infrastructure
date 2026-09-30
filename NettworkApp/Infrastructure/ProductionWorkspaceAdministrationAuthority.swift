@@ -1,4 +1,5 @@
 import CloudSync
+import FeatureContracts
 import Foundation
 import NetworkModel
 import WorkspaceChangeControl
@@ -41,7 +42,7 @@ enum ProductionWorkspaceAdministrationError: LocalizedError {
 /// Production-only workspace administration boundary. It owns no CloudKit
 /// transport and performs every share mutation through CloudWorkspaceAuthority.
 @MainActor
-final class ProductionWorkspaceAdministrationAuthority: WorkspaceAdministrationModel {
+final class ProductionWorkspaceAdministrationAuthority: WorkspaceAdministrationService {
     private let account: AccountContext
     private let workspaceName: String
     private let lifecycle: CloudSessionLifecycle

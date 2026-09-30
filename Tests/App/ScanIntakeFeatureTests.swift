@@ -1,3 +1,4 @@
+import FeatureContracts
 import Foundation
 import NetworkModel
 import WorkspaceChangeControl
@@ -6,6 +7,25 @@ import XCTest
 @testable import Nettwork
 
 final class ScanIntakeFeatureTests: XCTestCase {
+    @MainActor
+    func testInvalidScanClearsPreviouslyResolvedDestination() async {
+        let objectID = ObjectID()
+        let model = ScanIntakeModel(
+            account: scanTestAccount(),
+            capture: ScanCaptureProbe(availability: .unavailable("No camera")),
+            resolver: ScanResolverStub(results: [objectID: true])
+        )
+        await model.accept(ObjectLink.url(for: objectID).absoluteString)
+        XCTAssertEqual(model.destination, .objectDetails(objectID))
+
+        await model.accept("not an object label")
+
+        XCTAssertNil(model.destination)
+        guard case .invalid = model.resolutionState else {
+            return XCTFail("The malformed scan must replace the previous success.")
+        }
+    }
+
     @MainActor
     func testResolvedCameraLabelStopsCaptureAndKeepsResolutionSeparate() async {
         let objectID = ObjectID()

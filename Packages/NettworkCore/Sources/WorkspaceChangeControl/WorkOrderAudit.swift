@@ -61,8 +61,8 @@ public struct AuditEvent: Identifiable, Codable, Hashable, Sendable {
         self.changes = changes
         self.workOrderID = workOrderID
         self.ticket = ticket
-        self.occurredAt = occurredAt
-        self.serverOccurredAt = serverOccurredAt
+        self.occurredAt = occurredAt.canonicalPayloadTimestamp
+        self.serverOccurredAt = serverOccurredAt?.canonicalPayloadTimestamp
         self.policyVersion = policyVersion
         self.cloudKitChangeTags = cloudKitChangeTags
         self.result = result

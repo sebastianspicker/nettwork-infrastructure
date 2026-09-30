@@ -1,90 +1,9 @@
+import FeatureContracts
 import Foundation
 import NetworkModel
 import Observation
 import SwiftUI
 import WorkspaceChangeControl
-
-/// The intentionally small payload allowed on a physical label. The route is
-/// derived rather than accepted from callers, so labels cannot carry mutable
-/// topology text, addresses, credentials, or host names.
-struct PrivacySafeLabel: Identifiable, Equatable, Sendable {
-    let objectID: ObjectID
-    let assetCode: AssetCode
-    let checkText: String
-
-    var id: ObjectID { objectID }
-    var opaqueRoute: URL { ObjectLink.url(for: objectID) }
-}
-enum PrivacySafeLabelValidationError: LocalizedError, Equatable, Sendable {
-    case invalidPayload
-    case tooManyLabels
-    case duplicateObjectID
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidPayload:
-            "A label payload must contain one canonical object route, a validated asset code, and bounded check text."
-        case .tooManyLabels:
-            "The label request exceeds the maximum sheet batch size."
-        case .duplicateObjectID:
-            "A label source returned the same object more than once."
-        }
-    }
-}
-
-enum PrivacySafeLabelValidator {
-    static let maximumLabels = 100
-    static let maximumAssetCodeLength = 64
-    static let maximumCheckTextLength = 16
-
-    static func validate(_ label: PrivacySafeLabel) throws {
-        guard label.opaqueRoute == ObjectLink.url(for: label.objectID),
-            isSafeToken(label.assetCode.value, maximumLength: maximumAssetCodeLength),
-            label.assetCode == AssetCode(label.assetCode.value),
-            isSafeToken(label.checkText, maximumLength: maximumCheckTextLength)
-        else {
-            throw PrivacySafeLabelValidationError.invalidPayload
-        }
-    }
-
-    static func validated(_ labels: [PrivacySafeLabel], limit: Int = maximumLabels) throws -> [PrivacySafeLabel] {
-        guard labels.count <= min(max(limit, 1), maximumLabels) else {
-            throw PrivacySafeLabelValidationError.tooManyLabels
-        }
-        var seen = Set<ObjectID>()
-        for label in labels {
-            guard seen.insert(label.objectID).inserted else {
-                throw PrivacySafeLabelValidationError.duplicateObjectID
-            }
-            try validate(label)
-        }
-        return labels.sorted { lhs, rhs in
-            if lhs.assetCode != rhs.assetCode { return lhs.assetCode < rhs.assetCode }
-            return lhs.objectID < rhs.objectID
-        }
-    }
-
-    private static func isSafeToken(_ value: String, maximumLength: Int) -> Bool {
-        guard !value.isEmpty, value.count <= maximumLength else { return false }
-        return value.unicodeScalars.allSatisfy { scalar in
-            CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_")).contains(scalar)
-        }
-    }
-}
-
-/// A source exposes a bounded, account-scoped projection. It must never expose
-/// or accept mutable topology data as label input.
-protocol PrivacySafeLabelSourcing: Sendable {
-    func labels(in namespace: PersistenceNamespace, limit: Int) async throws -> [PrivacySafeLabel]
-}
-
-struct LabelSheetConfiguration: Equatable, Sendable {
-    var columns = 3
-    var rows = 7
-    var marginMillimeters = 6.0
-    var labelWidthMillimeters = 63.5
-    var labelHeightMillimeters = 38.1
-}
 
 enum LabelSheetPreset: String, CaseIterable, Identifiable, Sendable {
     case compact
@@ -121,26 +40,11 @@ enum LabelSheetPreset: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-struct LabelPDFDocument: Sendable {
-    let data: Data
-    let pageCount: Int
-}
-
-protocol LabelPDFGenerating: Sendable {
-    func makePDF(labels: [PrivacySafeLabel], configuration: LabelSheetConfiguration) async throws -> LabelPDFDocument
-}
-
-protocol LabelPDFExporting: Sendable {
-    func export(_ document: LabelPDFDocument) async throws
-}
-
-protocol LabelPrinting: Sendable {
-    func print(_ document: LabelPDFDocument) async throws
-}
-
 @MainActor
 @Observable
 final class LabelSheetModel {
+    private var loadGeneration: UInt64 = 0
+    private var documentGeneration: UInt64 = 0
     private let account: AccountContext
     private let source: any PrivacySafeLabelSourcing
     private let generator: any LabelPDFGenerating
@@ -150,7 +54,7 @@ final class LabelSheetModel {
     var configuration = LabelSheetConfiguration() {
         didSet {
             selectedPreset = LabelSheetPreset.matching(configuration)
-            document = nil
+            invalidateDocument()
         }
     }
     var selectedPreset: LabelSheetPreset = .standard
@@ -178,21 +82,30 @@ final class LabelSheetModel {
     }
 
     func load() async {
+        guard !Task.isCancelled else { return }
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        invalidateDocument()
+        labels = []
+        selectedObjectIDs = []
         state = .loading
-        document = nil
         do {
-            labels = try PrivacySafeLabelValidator.validated(
+            let loaded = try PrivacySafeLabelValidator.validated(
                 await source.labels(in: account.namespace, limit: PrivacySafeLabelValidator.maximumLabels)
             )
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            labels = loaded
             selectedObjectIDs = Set(labels.map(\.objectID))
             state = labels.isEmpty ? .empty : .ready
         } catch is CancellationError {
             return
         } catch is PrivacySafeLabelValidationError {
+            guard generation == loadGeneration, !Task.isCancelled else { return }
             labels = []
             selectedObjectIDs = []
             state = .quarantined("The label source returned a payload outside the privacy-safe label contract.")
         } catch {
+            guard generation == loadGeneration, !Task.isCancelled else { return }
             labels = []
             selectedObjectIDs = []
             state = .offline("Labels are unavailable from the scoped local mirror.")
@@ -211,30 +124,43 @@ final class LabelSheetModel {
         } else {
             selectedObjectIDs.insert(label.objectID)
         }
-        document = nil
+        invalidateDocument()
     }
 
     func selectAll() {
         selectedObjectIDs = Set(labels.map(\.objectID))
-        document = nil
+        invalidateDocument()
     }
 
     func clearSelection() {
         selectedObjectIDs = []
+        invalidateDocument()
+    }
+
+    private func invalidateDocument() {
+        documentGeneration &+= 1
         document = nil
     }
 
     func generate() async {
-        guard !selectedLabels.isEmpty else {
+        guard !Task.isCancelled else { return }
+        invalidateDocument()
+        let generation = documentGeneration
+        let requestedLabels = selectedLabels
+        let requestedConfiguration = configuration
+        guard !requestedLabels.isEmpty else {
             state = .unavailable("Select at least one privacy-safe label before generating a PDF.")
             return
         }
         do {
-            document = try await generator.makePDF(labels: selectedLabels, configuration: configuration)
+            let generated = try await generator.makePDF(labels: requestedLabels, configuration: requestedConfiguration)
+            guard generation == documentGeneration, !Task.isCancelled else { return }
+            document = generated
             state = .ready
         } catch is CancellationError {
             return
         } catch {
+            guard generation == documentGeneration, !Task.isCancelled else { return }
             state = .quarantined("The PDF could not be produced. Labels include only opaque routes, asset codes, and check text.")
         }
     }

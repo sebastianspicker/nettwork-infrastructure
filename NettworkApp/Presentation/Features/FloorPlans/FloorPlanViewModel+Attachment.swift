@@ -1,5 +1,6 @@
 import ContentSafety
 import CoreGraphics
+import FeatureContracts
 import NetworkModel
 import Observation
 import SwiftUI

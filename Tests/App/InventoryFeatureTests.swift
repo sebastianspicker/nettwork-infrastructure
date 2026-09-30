@@ -1,3 +1,4 @@
+import FeatureContracts
 import Foundation
 import NetworkModel
 import WorkspaceChangeControl
@@ -19,6 +20,32 @@ final class InventoryFeatureTests: XCTestCase {
         XCTAssertGreaterThan(query.maximumResults, 50)
         // InventoryExploreModel clamps this request to 50 before invoking its query seam.
         XCTAssertEqual(min(max(query.maximumResults, 1), 50), 50)
+    }
+
+    @MainActor
+    func testFailedSearchClearsPreviousMatchesWhileLoadingAndExposesError() async {
+        let query = ControllableInventoryQuery()
+        let model = InventoryExploreModel(
+            account: inventoryTestAccount(), queryService: query, historyStore: InventoryHistoryFixture()
+        )
+        let previous = inventoryResult(title: "Previous query")
+        let first = Task { await model.search() }
+        await waitUntil { await query.hasSearch("") }
+        await query.completeSearch("", with: [previous])
+        await first.value
+        XCTAssertEqual(model.results, [previous])
+
+        model.query.text = "new query"
+        let second = Task { await model.search() }
+        await waitUntil { await query.hasSearch("new query") }
+        XCTAssertTrue(model.results.isEmpty)
+        await query.failSearch("new query")
+        await second.value
+
+        XCTAssertTrue(model.results.isEmpty)
+        guard case .offline = model.state else {
+            return XCTFail("A failed query must expose its error without stale matches.")
+        }
     }
 
     @MainActor
@@ -338,6 +365,10 @@ private actor ControllableInventoryQuery: InventoryQuerying {
 
     func completeSearch(_ text: String, with results: [InventorySearchResult]) {
         searches.removeValue(forKey: text)?.resume(returning: results)
+    }
+
+    func failSearch(_ text: String) {
+        searches.removeValue(forKey: text)?.resume(throwing: CocoaError(.fileReadUnknown))
     }
 
     func completeDetails(_ id: ObjectID, with details: InventoryObjectDetails?) {

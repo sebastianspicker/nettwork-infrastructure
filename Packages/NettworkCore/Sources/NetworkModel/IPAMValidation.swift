@@ -1,6 +1,6 @@
 import Foundation
 
-public enum DefaultIPAMValidationService: IPAMValidationService {
+public enum DefaultIPAMValidationService {
     /// Compatibility validation for the repository protocol. Use the overload below before a complete IPAM commit.
     public static func validate(prefixes: [Prefix], addresses: [IPAddressRecord], vlans: [VLAN]) throws {
         let prefixIndex = try validatePrefixes(prefixes)

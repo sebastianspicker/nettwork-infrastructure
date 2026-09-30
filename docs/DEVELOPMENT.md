@@ -61,21 +61,19 @@ Run commands from the repository root unless stated otherwise.
 
 | Command | Scope |
 | --- | --- |
-| `make check` | Selected package builds plus configuration, syntax, assets, whitespace, architecture, source-quality, formatting, script, web, and Markdown checks |
+| `make check` | Everything CI runs: `verify-source`, `verify-package`, and `verify-native` |
 | `make format` | Formats maintained Swift, shell, and demo sources |
-| `make check-format` | Checks Swift, shell, HTML, CSS, and JavaScript formatting without modifying files |
+| `make check-format` | Checks Swift formatting (general and production configurations) without modifying files; shell and web formatting are checked by `check-scripts` and `check-web` |
 | `make check-scripts` | Runs Ruby syntax, ShellCheck, shfmt, Bash parsing, and script clone detection |
 | `make check-web` | Checks `site/` with ESLint, Prettier, clone detection, and semantic demo validation |
 | `make verify-source` | CI source gate; does not build app targets or run package/app tests |
 | `make verify-package` | Complete `NettworkCore` Swift package tests with compiler warnings treated as errors |
 | `make verify-native` | Generates the Xcode project, tests the macOS app bundle, and builds the iOS Simulator app without signing |
 | `make benchmark` | Release measurements with fixed fixtures; no wall-clock pass/fail thresholds |
-| `make check-package` | Manifest check and builds of `NetworkModel`, `CloudSync`, and `ImportExport` |
-| `make check-architecture` | Exact package dependencies, forbidden imports, and retired source paths |
+| `make check-architecture` | Exact package dependencies, and forbidden imports; requires `rg`, `swift`, and `ruby` |
 | `make check-quality` | Authored-source physical limits plus Swift callable length, complexity, and exact-clone checks |
 | `make check-assets` | Asset JSON, references, dimensions, opacity, required colors, and target settings |
 | `make lint-docs` | Locked Markdown linting for root and package documentation |
-| `make check-demo` | Local static demo artifact and JavaScript parse when Node is available |
 
 For a documentation-only change, run:
 
@@ -185,7 +183,7 @@ The public demo is at <https://sebastianspicker.github.io/nettwork/>.
 Validate and preview it locally with:
 
 ```sh
-make build-demo
+make check-web
 python3 -m http.server 4173 --bind 127.0.0.1 --directory site
 ```
 
@@ -224,6 +222,6 @@ application build. Signing, live CloudKit, and device-only integrations remain
 separate verification requirements.
 
 The separate Pages workflow installs the same locked Node toolchain on Ubuntu,
-runs `make check-web` and `make build-demo`, and uploads `site/`. Repository
+runs `make check-web` and uploads `site/`. Repository
 Pages enablement, the deployed URL, and production availability are external
 state and are not verified by these workflows.

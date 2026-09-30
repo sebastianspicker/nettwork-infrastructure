@@ -101,7 +101,12 @@ test "$launch_color" = "LaunchBackground" || {
 ruby -ryaml -e '
     spec = YAML.load_file(ARGV.fetch(0))
     %w[Nettwork NettworkMac].each do |name|
-      settings = spec.dig("targets", name, "settings", "base") || {}
+      target = spec.dig("targets", name) || {}
+      settings = {}
+      (target["templates"] || []).each do |template|
+        settings.merge!(spec.dig("targetTemplates", template, "settings", "base") || {})
+      end
+      settings.merge!(target.dig("settings", "base") || {})
       abort "#{name} must use AppIcon" unless settings["ASSETCATALOG_COMPILER_APPICON_NAME"] == "AppIcon"
       abort "#{name} must use AccentColor" unless settings["ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME"] == "AccentColor"
     end

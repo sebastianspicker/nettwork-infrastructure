@@ -1,4 +1,5 @@
 import ContentSafety
+import FeatureContracts
 import NetworkModel
 import SwiftUI
 import WorkspaceChangeControl

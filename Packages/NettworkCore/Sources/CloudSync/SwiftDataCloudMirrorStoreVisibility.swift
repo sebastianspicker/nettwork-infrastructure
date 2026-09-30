@@ -11,8 +11,7 @@ extension SwiftDataCloudMirrorStore {
 
     /// The ordinary lifecycle path reads the one deterministic workspace row,
     /// one exact session, and at most 200 indexed member digests. It is the
-    /// ordinary apply lifecycle derivation; the legacy whole-record helper is
-    /// retained only for unrelated compatibility callers.
+    /// ordinary apply lifecycle derivation.
     func deriveWorkspaceVisibilityIndexed(
         applying records: [LocalMirrorRecord],
         maintenance: LocalMirrorMaintenanceBatch, namespace: PersistenceNamespace

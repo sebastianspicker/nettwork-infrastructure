@@ -1,47 +1,9 @@
+import FeatureContracts
 import Foundation
 import NetworkModel
 import Observation
 import SwiftUI
 import WorkspaceChangeControl
-
-/// A presentation of the current, independently verified workspace membership.
-/// This is deliberately scoped to the current participant: CloudKit share
-/// participant enumeration remains inside the injected workspace authority.
-struct WorkspaceParticipantStatusPresentation: Equatable, Sendable {
-    let workspaceName: String
-    let participantRecordName: String
-    let role: OfficialClientRole?
-    let permission: WorkspaceSharePermission
-    let shareRecordName: String?
-    let membershipIsVerified: Bool
-    let disclosure: String
-}
-
-struct WorkspaceInviteRequest: Equatable, Sendable {
-    let participantCloudKitUserRecordName: String
-    let permission: WorkspaceSharePermission
-}
-
-/// The opaque metadata is only returned to the app integration layer for
-/// delivery to the invited participant. The administration screen never
-/// renders or persists it.
-struct WorkspaceInviteReceipt: Equatable, Sendable {
-    let participantCloudKitUserRecordName: String
-    let shareMetadata: Data
-}
-
-@MainActor
-protocol WorkspaceAdministrationModel {
-    func participantStatus() async throws -> WorkspaceParticipantStatusPresentation
-    func inviteParticipant(_ request: WorkspaceInviteRequest) async throws -> WorkspaceInviteReceipt
-    func acceptShare(metadata: Data) async throws -> WorkspaceAcceptedShare
-    func revokeCurrentShare() async throws
-}
-
-struct WorkspaceAcceptedShare: Sendable {
-    let account: AccountContext
-    let presentation: WorkspaceParticipantStatusPresentation
-}
 
 @MainActor
 @Observable
@@ -51,9 +13,9 @@ final class WorkspaceAdministrationViewModel {
     private(set) var isPerformingAction = false
     private(set) var errorMessage: String?
 
-    private let service: any WorkspaceAdministrationModel
+    private let service: any WorkspaceAdministrationService
 
-    init(service: any WorkspaceAdministrationModel) {
+    init(service: any WorkspaceAdministrationService) {
         self.service = service
     }
 

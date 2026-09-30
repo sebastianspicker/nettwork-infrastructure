@@ -1,3 +1,4 @@
+import FeatureContracts
 import Foundation
 import ImportExport
 import NetworkModel
@@ -127,10 +128,10 @@ extension TransferScreen {
         guard let context = restoreAuthorization?() else { return }
         do {
             let urls = try result.get()
-            guard let url = urls.first else {
-                throw ProductionArchiveDocumentAdapterError.invalidPackage
+            guard let url = urls.first, let archivePackageSource else {
+                throw TransferDocumentError.invalidPackage
             }
-            verifyRestore(source: try ProductionArchivePackageEntrySource(url: url), authorization: context)
+            verifyRestore(source: try archivePackageSource(url), authorization: context)
         } catch {
             model.reportArchiveSelectionFailure(error)
         }

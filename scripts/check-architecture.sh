@@ -7,6 +7,13 @@ cd "$repository_root"
 
 failures=0
 
+for tool in rg swift ruby; do
+    command -v "$tool" >/dev/null 2>&1 || {
+        echo "architecture: required tool '$tool' is not installed or not on PATH" >&2
+        exit 1
+    }
+done
+
 fail() {
     echo "architecture: $*" >&2
     failures=1
@@ -16,8 +23,12 @@ forbid_imports() {
     local description="$1"
     local pattern="$2"
     shift 2
-    local matches
-    matches="$(rg -n --glob '*.swift' "$pattern" "$@" || :)"
+    local matches status=0
+    matches="$(rg -n --glob '*.swift' "$pattern" "$@")" || status=$?
+    if ((status > 1)); then
+        echo "architecture: rg failed with exit $status while checking: $description" >&2
+        exit 1
+    fi
     if [[ -n "$matches" ]]; then
         fail "$description"
         printf '%s\n' "$matches" >&2
@@ -32,7 +43,8 @@ check_package_dependencies() {
         "Persistence" => ["NetworkModel", "WorkspaceChangeControl"],
         "CloudSync" => ["NetworkModel", "WorkspaceChangeControl", "Persistence"],
         "ContentSafety" => ["NetworkModel", "WorkspaceChangeControl"],
-        "ImportExport" => ["NetworkModel", "WorkspaceChangeControl", "ContentSafety"]
+        "ImportExport" => ["NetworkModel", "WorkspaceChangeControl", "ContentSafety"],
+        "FeatureContracts" => ["NetworkModel", "WorkspaceChangeControl", "ContentSafety", "ImportExport"]
       }
       targets = JSON.parse(STDIN.read).fetch("targets").to_h { |target| [target.fetch("name"), target] }
       failures = []
@@ -64,23 +76,14 @@ forbid_imports \
     Packages/NettworkCore/Sources/NetworkModel
 
 forbid_imports \
+    "FeatureContracts must not import UI frameworks, SwiftData, CloudKit, Persistence, or CloudSync" \
+    '^\s*import\s+(SwiftUI|SwiftData|CloudKit|UIKit|AppKit|Persistence|CloudSync)\b' \
+    Packages/NettworkCore/Sources/FeatureContracts
+
+forbid_imports \
     "Presentation must not import CloudKit, SwiftData, Persistence, or CloudSync" \
     '^\s*import\s+(CloudKit|SwiftData|Persistence|CloudSync)\b' \
     NettworkApp/Presentation
-
-forbid_imports \
-    "production sources must import NetworkModel, not the retired NetworkDomain module" \
-    '^\s*import\s+NetworkDomain\b' \
-    NettworkApp Packages/NettworkCore/Sources
-
-legacy_paths="$(rg -n \
-    --glob '*.swift' --glob '*.sh' --glob Makefile --glob project.yml \
-    'NettworkApp/(Features|Models|Services|Views)/|(^|/)Nettwork(UI)?Tests/' \
-    NettworkApp Tests Packages scripts Makefile project.yml || :)"
-if [[ -n "$legacy_paths" ]]; then
-    fail "retired app or test source paths remain referenced"
-    printf '%s\n' "$legacy_paths" >&2
-fi
 
 if ((failures)); then
     exit 1

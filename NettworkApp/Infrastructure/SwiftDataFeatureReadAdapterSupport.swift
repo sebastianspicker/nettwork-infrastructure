@@ -1,6 +1,7 @@
 import CloudSync
 import ContentSafety
 import CryptoKit
+import FeatureContracts
 import Foundation
 import ImportExport
 import NetworkModel
@@ -48,7 +49,7 @@ extension SwiftDataFeatureReadAdapter {
         return "\(segment.segment.kind.rawValue) · \(asset)"
     }
     static func traceSegmentSnapshot(_ segment: RichTraceSegment, topology: PhysicalTopology) -> TraceSegmentSnapshot {
-        let kind: TraceSegmentKind = segment.segment.kind == .cable ? .cable : .internalLink
+        let kind: FeatureContracts.TraceSegmentKind = segment.segment.kind == .cable ? .cable : .internalLink
         let detail: String?
         let request: TopologyWorkOrderRequest?
         if segment.segment.kind == .cable,

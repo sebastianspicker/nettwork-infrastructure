@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreImage
 import CoreText
+import FeatureContracts
 import Foundation
 import NetworkModel
 import WorkspaceChangeControl

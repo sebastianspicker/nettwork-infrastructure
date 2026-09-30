@@ -200,8 +200,6 @@ public struct CloudAccountIdentity: Codable, Hashable, Sendable {
     }
 }
 
-public enum CloudMembershipState: String, Codable, Hashable, Sendable { case owner, participant, revoked, unavailable }
-
 /// Account and share calls are deliberately separate from record transport so a
 /// fake transport cannot accidentally claim that a CloudKit account was verified.
 public protocol CloudWorkspaceAuthority: Sendable {
@@ -244,11 +242,4 @@ public struct CloudMirrorStatus: Codable, Hashable, Sendable {
         self.conflictCount = conflictCount
         self.lastSuccessfulServerContact = lastSuccessfulServerContact
     }
-}
-
-/// A placeholder coordinator that makes no CloudKit calls; root composition must
-/// replace it only after a workspace account and membership are verified.
-public actor UnconfiguredSyncCoordinator: SyncCoordinator {
-    public init() {}
-    public func synchronizeForeground() async -> SyncReceipt { SyncReceipt(errors: ["Cloud sync transport is not configured."]) }
 }

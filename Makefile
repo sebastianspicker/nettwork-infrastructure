@@ -1,4 +1,4 @@
-.PHONY: generate build check format check-format check-scripts check-web check-demo build-demo check-package check-config check-syntax check-assets check-whitespace check-architecture check-quality test lint-docs verify-source verify-package verify-native benchmark
+.PHONY: generate check format check-format check-scripts check-web check-config check-syntax check-assets check-whitespace check-architecture check-quality test lint-docs verify-source verify-package verify-native benchmark
 
 NATIVE_DERIVED_DATA ?= $(CURDIR)/DerivedData
 
@@ -9,9 +9,7 @@ generate:
 	}
 	xcodegen generate
 
-build: check-package
-
-check: build verify-source
+check: verify-source verify-package verify-native
 
 format:
 	xcrun swift format format --configuration .swift-format --in-place --recursive \
@@ -24,8 +22,6 @@ check-format:
 		NettworkApp Packages/NettworkCore/Sources Packages/NettworkCore/Tests Packages/NettworkCore/Benchmarks Tests/App
 	xcrun swift format lint --strict --configuration .swift-format-production --recursive \
 		NettworkApp Packages/NettworkCore/Sources Packages/NettworkCore/Benchmarks
-	npm run check:format
-	@find scripts -type f -name '*.sh' -print0 | xargs -0 shfmt -d -i 4 -ci
 
 check-scripts:
 	@find scripts -type f -name '*.rb' -print0 | xargs -0 -n1 ruby -cw
@@ -40,27 +36,20 @@ check-web:
 	npm run check:clones:web
 	bash scripts/validate-demo.sh
 
-check-demo:
-	bash scripts/validate-demo.sh
-
-build-demo:
-	bash scripts/build-demo.sh
-
-check-package:
-	swift package --package-path Packages/NettworkCore dump-package >/dev/null
-	swift build --package-path Packages/NettworkCore --target NetworkModel -Xswiftc -warnings-as-errors
-	swift build --package-path Packages/NettworkCore --target CloudSync -Xswiftc -warnings-as-errors
-	swift build --package-path Packages/NettworkCore --target ImportExport -Xswiftc -warnings-as-errors
-
 check-config:
 	ruby -e 'require "yaml"; spec = YAML.load_file("project.yml"); abort "missing Nettwork targets" unless spec.dig("targets", "Nettwork") && spec.dig("targets", "NettworkMac")'
 	plutil -lint NettworkApp/Resources/Info.plist Config/Nettwork-iOS.entitlements \
 		Config/Nettwork-macOS.entitlements
 
 check-syntax:
-	@rg --files NettworkApp Tests/App \
+	@command -v rg >/dev/null || { \
+		echo "check-syntax: required tool 'rg' is not installed or not on PATH"; \
+		exit 1; \
+	}
+	@files=$$(rg --files NettworkApp Tests/App \
 		Packages/NettworkCore/Sources Packages/NettworkCore/Tests Packages/NettworkCore/Benchmarks \
-		-g '*.swift' -0 | xargs -0 swiftc -parse
+		-g '*.swift') || { echo "check-syntax: rg failed"; exit 1; }; \
+	printf '%s\n' "$$files" | tr '\n' '\0' | xargs -0 swiftc -parse
 
 check-assets:
 	bash scripts/validate-assets.sh

@@ -1,3 +1,4 @@
+import FeatureContracts
 import Foundation
 
 extension IPAMWorkspaceModel {

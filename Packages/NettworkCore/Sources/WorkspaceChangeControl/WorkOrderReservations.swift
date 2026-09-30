@@ -30,8 +30,24 @@ public struct CloudKitAcknowledgement: Codable, Hashable, Sendable {
         self.intentDigest = intentDigest
         self.systemFields = systemFields
         self.changeTag = changeTag
-        self.acknowledgedAt = acknowledgedAt
-        self.expiresAt = expiresAt
+        self.acknowledgedAt = acknowledgedAt.canonicalPayloadTimestamp
+        self.expiresAt = expiresAt.canonicalPayloadTimestamp
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(workspaceZone, forKey: .workspaceZone)
+        try container.encode(cloudKitAccountRecordName, forKey: .cloudKitAccountRecordName)
+        try container.encode(sessionGeneration, forKey: .sessionGeneration)
+        try container.encode(reservationID, forKey: .reservationID)
+        try container.encode(workOrderID, forKey: .workOrderID)
+        try container.encode(ownerID, forKey: .ownerID)
+        try container.encodeSorted(resourceKeys, forKey: .resourceKeys)
+        try container.encode(intentDigest, forKey: .intentDigest)
+        try container.encode(systemFields, forKey: .systemFields)
+        try container.encode(changeTag, forKey: .changeTag)
+        try container.encode(acknowledgedAt, forKey: .acknowledgedAt)
+        try container.encode(expiresAt, forKey: .expiresAt)
     }
 }
 public struct WorkOrderReservation: Codable, Hashable, Sendable, Identifiable {
@@ -44,6 +60,14 @@ public struct WorkOrderReservation: Codable, Hashable, Sendable, Identifiable {
         self.ownerID = ownerID
         self.resourceKeys = resourceKeys
         self.acknowledgedByCloudKit = acknowledgedByCloudKit
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(ownerID, forKey: .ownerID)
+        try container.encodeSorted(resourceKeys, forKey: .resourceKeys)
+        try container.encodeIfPresent(acknowledgedByCloudKit, forKey: .acknowledgedByCloudKit)
     }
 
     public static func deterministicID(for operationID: ObjectID) -> ObjectID {
@@ -95,7 +119,7 @@ public enum ResourceReservationLockFactory {
     }
 
     public static func tombstones(
-        for workOrder: WorkOrder, deletedAt: Date = .now
+        for workOrder: WorkOrder, deletedAt: Date = .canonicalNow
     ) throws -> [AuthoritativeTombstone] {
         guard let reservation = workOrder.reservation, let intentDigest = workOrder.intentDigest else {
             throw ResourceReservationLockFactoryError.missingReservation

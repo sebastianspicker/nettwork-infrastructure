@@ -1,43 +1,8 @@
+import FeatureContracts
 import NetworkModel
 import Observation
 import SwiftUI
 import WorkspaceChangeControl
-
-struct AuditEventPresentation: Identifiable, Equatable, Sendable {
-    let event: AuditEvent
-    let summary: String
-    var id: ObjectID { event.id }
-}
-
-struct OperationsReport: Identifiable, Equatable, Sendable {
-    let id: String
-    let title: String
-    let generatedAt: Date
-    let summary: String
-    let isFinal: Bool
-}
-
-struct WorkspaceAccessPresentation: Equatable, Sendable {
-    let workspaceName: String
-    let accountRecordName: String
-    let role: OfficialClientRole
-    let permission: WorkspaceSharePermission
-    let policyVersion: String
-    let disclosure: String
-}
-
-struct SyncHealthPresentation: Equatable, Sendable {
-    let mirror: SyncMirrorPresentation
-    let queueDescription: String
-    let quarantineDescription: String
-    let backupDescription: String
-    let accountFresh: Bool
-}
-
-struct SyncMirrorPresentation: Equatable, Sendable {
-    let conflictCount: Int
-    let lastSuccessfulServerContact: Date?
-}
 
 enum OperationsScreenMode: String, CaseIterable, Equatable, Identifiable, Sendable {
     case reports
@@ -59,15 +24,6 @@ enum OperationsLoadPhase: Equatable, Sendable {
     case loaded
     case empty
     case failed(String)
-}
-
-@MainActor
-protocol OperationsReadModel {
-    func auditEvents(matching query: String) async throws -> [AuditEventPresentation]
-    func reports() async throws -> [OperationsReport]
-    func syncHealth() async throws -> SyncHealthPresentation
-    func workspaceAccess() async throws -> WorkspaceAccessPresentation
-    func exportImmutableAudit(authorization: AuthorizedOperationContext) async throws -> URL
 }
 
 @MainActor

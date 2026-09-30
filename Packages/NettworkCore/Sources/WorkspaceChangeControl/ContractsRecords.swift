@@ -27,7 +27,7 @@ public struct ActorInstallationSnapshot: Codable, Hashable, Sendable {
         self.installationID = installationID
         self.sessionID = sessionID
         self.sessionGeneration = sessionGeneration
-        self.capturedAt = capturedAt
+        self.capturedAt = capturedAt.canonicalPayloadTimestamp
     }
 }
 

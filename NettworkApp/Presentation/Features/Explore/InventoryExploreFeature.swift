@@ -1,3 +1,4 @@
+import FeatureContracts
 import Foundation
 import NetworkModel
 import Observation
@@ -14,107 +15,6 @@ enum InventoryPresentationState: Equatable {
     case quarantined(String)
     case permissionDenied(String)
     case unavailable(String)
-}
-
-enum InventoryObjectKind: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case site, room, rack, device, port, cable, address, interface
-    var id: String { rawValue }
-    var title: String { rawValue.capitalized }
-    var symbolName: String {
-        switch self {
-        case .site, .room: "building.2"
-        case .rack: "server.rack"
-        case .device: "cpu"
-        case .port: "rectangle.portrait.and.arrow.forward"
-        case .cable: "cable.connector"
-        case .address: "network"
-        case .interface: "point.3.connected.trianglepath.dotted"
-        }
-    }
-}
-
-struct InventorySearchQuery: Equatable, Sendable {
-    var text = ""
-    var kinds = Set<InventoryObjectKind>()
-    var siteID: ObjectID?
-    var maximumResults = 50
-}
-
-struct InventorySiteOption: Identifiable, Equatable, Sendable {
-    let id: ObjectID
-    let title: String
-}
-
-struct InventorySearchResult: Identifiable, Equatable, Sendable {
-    let id: ObjectID
-    let kind: InventoryObjectKind
-    let title: String
-    let subtitle: String
-    let siteName: String?
-    let searchTerms: [String]
-    let isTombstoned: Bool
-    let isPending: Bool
-    let isConflicted: Bool
-
-    init(
-        id: ObjectID,
-        kind: InventoryObjectKind,
-        title: String,
-        subtitle: String,
-        siteName: String?,
-        searchTerms: [String] = [],
-        isTombstoned: Bool,
-        isPending: Bool,
-        isConflicted: Bool
-    ) {
-        self.id = id
-        self.kind = kind
-        self.title = title
-        self.subtitle = subtitle
-        self.siteName = siteName
-        self.searchTerms = searchTerms
-        self.isTombstoned = isTombstoned
-        self.isPending = isPending
-        self.isConflicted = isConflicted
-    }
-}
-
-struct InventoryObjectDetails: Equatable, Sendable {
-    let result: InventorySearchResult
-    let containment: [String]
-    let connectivitySummary: String
-    let traceSummary: String
-    let logicalContext: [String]
-    let reservationSummary: String?
-    let pendingSummary: String?
-    let recentAuditSummary: [String]
-    let attachmentCount: Int
-}
-
-struct InventoryAccountScope: Hashable, Sendable {
-    let accountRecordName: String
-    let workspaceID: ObjectID
-    let sessionGeneration: UInt64
-
-    init(account: AccountContext) {
-        accountRecordName = account.namespace.cloudKitAccountRecordName
-        workspaceID = account.namespace.workspaceID
-        sessionGeneration = account.namespace.sessionGeneration
-    }
-}
-
-protocol InventoryQuerying: Sendable {
-    func siteOptions(in namespace: PersistenceNamespace) async throws -> [InventorySiteOption]
-    func search(_ query: InventorySearchQuery, in namespace: PersistenceNamespace) async throws -> [InventorySearchResult]
-    func results(for ids: [ObjectID], in namespace: PersistenceNamespace) async throws -> [InventorySearchResult]
-    func details(for id: ObjectID, in namespace: PersistenceNamespace) async throws -> InventoryObjectDetails?
-}
-
-protocol InventoryHistoryStoring: Sendable {
-    func recent(in scope: InventoryAccountScope) async -> [ObjectID]
-    func favorites(in scope: InventoryAccountScope) async -> Set<ObjectID>
-    func recordRecent(_ id: ObjectID, in scope: InventoryAccountScope) async
-    func toggleFavorite(_ id: ObjectID, in scope: InventoryAccountScope) async -> Set<ObjectID>
 }
 
 @MainActor
@@ -172,6 +72,7 @@ final class InventoryExploreModel {
         searchGeneration &+= 1
         let generation = searchGeneration
         state = .loading
+        results = []
         do {
             var bounded = query
             bounded.maximumResults = min(max(query.maximumResults, 1), 50)

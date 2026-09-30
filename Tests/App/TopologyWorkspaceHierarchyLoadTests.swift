@@ -1,22 +1,11 @@
+import FeatureContracts
 import NetworkModel
 import WorkspaceChangeControl
 import XCTest
 
 @testable import Nettwork
 
-final class TopologyHierarchyIndexTests: XCTestCase {
-    func testIndexPreservesRootsOrphansIdentityAndLocalizedChildOrder() {
-        let root = hierarchyNode(name: "Root")
-        let orphan = hierarchyNode(parentID: ObjectID(), name: "Orphan")
-        let childB = hierarchyNode(parentID: root.id, name: "Port 10")
-        let childA = hierarchyNode(parentID: root.id, name: "Port 2")
-        let index = TopologyHierarchyIndex(nodes: [childB, orphan, root, childA])
-
-        XCTAssertEqual(Set(index.roots.map(\.id)), Set([root.id, orphan.id]))
-        XCTAssertEqual(index.children(of: root.id).map(\.id), [childA.id, childB.id])
-        XCTAssertEqual(index.nodes.map(\.id), [childB.id, orphan.id, root.id, childA.id])
-    }
-
+final class TopologyWorkspaceHierarchyLoadTests: XCTestCase {
     @MainActor
     func testModelPublishesHierarchyIndexOnlyAfterSuccessfulCombinedLoad() async {
         let root = hierarchyNode(name: "Root")

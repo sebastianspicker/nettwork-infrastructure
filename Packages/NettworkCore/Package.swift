@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "CloudSync", targets: ["CloudSync"]),
         .library(name: "ContentSafety", targets: ["ContentSafety"]),
         .library(name: "ImportExport", targets: ["ImportExport"]),
+        .library(name: "FeatureContracts", targets: ["FeatureContracts"]),
         .executable(name: "NettworkBenchmarks", targets: ["NettworkBenchmarks"]),
     ],
     targets: [
@@ -20,6 +21,7 @@ let package = Package(
         .target(name: "CloudSync", dependencies: ["NetworkModel", "WorkspaceChangeControl", "Persistence"]),
         .target(name: "ContentSafety", dependencies: ["NetworkModel", "WorkspaceChangeControl"]),
         .target(name: "ImportExport", dependencies: ["NetworkModel", "WorkspaceChangeControl", "ContentSafety"]),
+        .target(name: "FeatureContracts", dependencies: ["NetworkModel", "WorkspaceChangeControl", "ContentSafety", "ImportExport"]),
         .executableTarget(name: "NettworkBenchmarks", dependencies: ["NetworkModel", "ImportExport"], path: "Benchmarks"),
         .testTarget(name: "NetworkModelTests", dependencies: ["NetworkModel"]),
         .testTarget(name: "WorkspaceChangeControlTests", dependencies: ["NetworkModel", "WorkspaceChangeControl"]),
@@ -27,6 +29,7 @@ let package = Package(
         .testTarget(name: "CloudSyncTests", dependencies: ["CloudSync", "Persistence", "NetworkModel", "WorkspaceChangeControl"]),
         .testTarget(name: "ContentSafetyTests", dependencies: ["ContentSafety", "NetworkModel", "WorkspaceChangeControl"]),
         .testTarget(name: "ImportExportTests", dependencies: ["ImportExport", "ContentSafety", "NetworkModel", "WorkspaceChangeControl"]),
+        .testTarget(name: "FeatureContractsTests", dependencies: ["FeatureContracts", "NetworkModel", "WorkspaceChangeControl"]),
     ],
     swiftLanguageModes: [.v6]
 )

@@ -28,8 +28,8 @@ public struct CancellationReleaseScope: Codable, Hashable, Sendable {
         self.installationID = installationID
         self.sessionID = sessionID
         self.sessionGeneration = sessionGeneration
-        self.issuedAt = issuedAt
-        self.expiresAt = expiresAt
+        self.issuedAt = issuedAt.canonicalPayloadTimestamp
+        self.expiresAt = expiresAt.canonicalPayloadTimestamp
     }
 }
 
@@ -86,76 +86,11 @@ public struct WorkOrderCancellation: Codable, Hashable, Sendable, Identifiable {
         self.id = id
         self.requestedBy = requestedBy
         self.reason = reason
-        self.requestedAt = requestedAt
+        self.requestedAt = requestedAt.canonicalPayloadTimestamp
         self.physicalStatus = physicalStatus
         self.releaseAuthorization = releaseAuthorization
-        self.resolvedAt = resolvedAt
+        self.resolvedAt = resolvedAt?.canonicalPayloadTimestamp
     }
-}
-
-public struct WorkOrder: Identifiable, Codable, Hashable, Sendable {
-    public let id: ObjectID
-    public var kind: WorkOrderKind
-    public var status: WorkOrderStatus
-    public var title: String
-    /// Legacy object-only reservation shape. New calls should use the reservation property.
-    public var reservedResourceIDs: Set<ObjectID>
-    public var cancellationReason: String?
-    public var creatorID: String
-    public var ticket: String?
-    public var notes: String?
-    public var plannedOperations: [PlannedWorkOperation]
-    public private(set) var revision: Int
-    /// Set at creation and never rewritten. Legacy work orders may have no digest.
-    public let intentDigest: IntentDigest?
-    /// Missing on legacy rows means canonical intent v1. New reservations
-    /// persist the exact version so future clients never reinterpret a digest.
-    public let intentSchemaVersion: Int?
-    public var reservation: WorkOrderReservation?
-    public var approvedBy: String?
-    public var approvedAt: Date?
-    public var executedBy: String?
-    public var executionStartedAt: Date?
-    public var completedAt: Date?
-    public var evidenceHashes: [EvidenceHash]
-    public var cancellationHistory: [WorkOrderCancellation]
-
-    public init(
-        id: ObjectID = .init(), kind: WorkOrderKind, title: String, status: WorkOrderStatus = .draft, reservedResourceIDs: Set<ObjectID> = [],
-        creatorID: String = "legacy-unspecified", ticket: String? = nil,
-        notes: String? = nil, plannedOperations: [PlannedWorkOperation] = [], revision: Int = 0, intentDigest: IntentDigest? = nil,
-        intentSchemaVersion: Int? = CanonicalWorkIntent.schemaVersion,
-        reservation: WorkOrderReservation? = nil, approvedBy: String? = nil, approvedAt: Date? = nil, executedBy: String? = nil,
-        executionStartedAt: Date? = nil, completedAt: Date? = nil,
-        evidenceHashes: [EvidenceHash] = [], cancellationHistory: [WorkOrderCancellation] = []
-    ) {
-        self.id = id
-        self.kind = kind
-        self.title = title
-        self.status = status
-        self.reservedResourceIDs = reservedResourceIDs
-        self.cancellationReason = nil
-        self.creatorID = creatorID
-        self.ticket = ticket
-        self.notes = notes
-        self.plannedOperations = plannedOperations
-        self.revision = max(0, revision)
-        self.intentDigest = intentDigest
-        self.intentSchemaVersion = intentSchemaVersion
-        self.reservation = reservation
-        self.approvedBy = approvedBy
-        self.approvedAt = approvedAt
-        self.executedBy = executedBy
-        self.executionStartedAt = executionStartedAt
-        self.completedAt = completedAt
-        self.evidenceHashes = evidenceHashes
-        self.cancellationHistory = cancellationHistory
-    }
-
-    public var reservedResourceKeys: Set<ResourceKey> {
-        (reservation?.resourceKeys ?? []).union(reservedResourceIDs.map(ResourceKey.object))
-    }
-    mutating func advanceRevision() { revision += 1 }
 }
 
 public struct WorkOrderTransitionContext: Hashable, Sendable {
@@ -168,7 +103,7 @@ public struct WorkOrderTransitionContext: Hashable, Sendable {
         releaseAuthorization: CancellationReleaseAuthorization? = nil
     ) {
         self.actorID = actorID
-        self.at = at
+        self.at = at.canonicalPayloadTimestamp
         self.cancellationPhysicalStatus = cancellationPhysicalStatus
         self.releaseAuthorization = releaseAuthorization
     }

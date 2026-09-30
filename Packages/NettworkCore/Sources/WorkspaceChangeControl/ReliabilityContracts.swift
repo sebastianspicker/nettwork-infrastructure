@@ -39,49 +39,6 @@ public enum CooperativeCancellation {
     }
 }
 
-/// A small, ordered helper for callers that have already selected an injected
-/// `BoundedOperationPolicy`. The closure is responsible for additional checks
-/// inside long-running individual items.
-public enum BoundedOperationExecutor {
-    public static func perform<Input: Sendable, Output: Sendable>(
-        _ inputs: [Input],
-        policy: BoundedOperationPolicy, operation: @escaping @Sendable (Input) async throws -> Output
-    ) async throws -> [Output] {
-        guard !inputs.isEmpty else { return [] }
-        var results = Array<Output?>(repeating: nil, count: inputs.count)
-        var nextIndex = 0
-
-        try await withThrowingTaskGroup(of: (Int, Output).self) { group in
-            try CooperativeCancellation.check()
-            let initialCount = min(policy.maximumConcurrentOperations, inputs.count)
-            for index in 0..<initialCount {
-                if index.isMultiple(of: policy.cancellationCheckInterval) {
-                    try CooperativeCancellation.check()
-                }
-                group.addTask { (index, try await operation(inputs[index])) }
-                nextIndex = index + 1
-            }
-
-            while let (index, output) = try await group.next() {
-                results[index] = output
-                if index.isMultiple(of: policy.cancellationCheckInterval) {
-                    try CooperativeCancellation.check()
-                }
-                if nextIndex < inputs.count {
-                    let scheduledIndex = nextIndex
-                    if scheduledIndex.isMultiple(of: policy.cancellationCheckInterval) {
-                        try CooperativeCancellation.check()
-                    }
-                    group.addTask { (scheduledIndex, try await operation(inputs[scheduledIndex])) }
-                    nextIndex += 1
-                }
-            }
-        }
-
-        return results.compactMap { $0 }
-    }
-}
-
 /// A requirement supplied by a caller or deployment policy, not evidence that a target
 /// has been achieved.
 public struct OperationPerformanceBudget: Codable, Hashable, Sendable {

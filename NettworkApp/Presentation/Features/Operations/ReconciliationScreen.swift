@@ -1,13 +1,8 @@
+import FeatureContracts
 import NetworkModel
 import Observation
 import SwiftUI
 import WorkspaceChangeControl
-
-@MainActor
-protocol ReconciliationFeatureService {
-    func unresolvedComparisons() async throws -> [ReconciliationComparison]
-    func createCorrectiveWorkOrder(for reconciliationID: ObjectID, authorization: OperationsAuthorization) async throws -> ObjectID
-}
 
 @MainActor
 @Observable

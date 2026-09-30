@@ -35,7 +35,7 @@ Install the tooling described in [Development](docs/DEVELOPMENT.md) first.
 | Change | Checks |
 | --- | --- |
 | Documentation | `make lint-docs`, `make check-whitespace`, and check links and images |
-| Browser demo | `make check-web`, `make build-demo`, and test the changed flow at desktop and mobile sizes |
+| Browser demo | `make check-web` and test the changed flow at desktop and mobile sizes |
 | Swift source or build configuration | `make verify-source`, `make verify-package`, and `make verify-native` |
 
 Add or update tests when behavior changes. Do not commit generated projects,

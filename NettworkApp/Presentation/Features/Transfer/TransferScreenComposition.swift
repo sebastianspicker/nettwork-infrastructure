@@ -1,3 +1,4 @@
+import FeatureContracts
 import Foundation
 import ImportExport
 import NetworkModel
@@ -22,6 +23,9 @@ struct TransferScreen: View {
     let csvExportDestination: (any CSVWorkspaceExportDestination)?
     let exportAuthorization: (() -> AuthorizedOperationContext?)?
     let restoreSource: (() -> (any ArchiveEntrySource)?)?
+    /// Opens a user-selected archive package. Composition injects the
+    /// platform package reader so this screen never constructs one itself.
+    let archivePackageSource: ((URL) throws -> any ArchiveEntrySource)?
     let restoreAuthorization: (() -> AuthorizedOperationContext?)?
     let statusAnnouncer: any AccessibilityStatusAnnouncing
 
@@ -33,6 +37,7 @@ struct TransferScreen: View {
         csvExportDestination: (any CSVWorkspaceExportDestination)? = nil,
         exportAuthorization: (() -> AuthorizedOperationContext?)? = nil,
         restoreSource: (() -> (any ArchiveEntrySource)?)? = nil,
+        archivePackageSource: ((URL) throws -> any ArchiveEntrySource)? = nil,
         restoreAuthorization: (() -> AuthorizedOperationContext?)? = nil,
         statusAnnouncer: any AccessibilityStatusAnnouncing = AccessibilityStatusAnnouncer()
     ) {
@@ -43,6 +48,7 @@ struct TransferScreen: View {
         self.csvExportDestination = csvExportDestination
         self.exportAuthorization = exportAuthorization
         self.restoreSource = restoreSource
+        self.archivePackageSource = archivePackageSource
         self.restoreAuthorization = restoreAuthorization
         self.statusAnnouncer = statusAnnouncer
     }

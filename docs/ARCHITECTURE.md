@@ -31,7 +31,7 @@ services with the native app.
 
 ## Components and dependency direction
 
-`NettworkCore` contains six Swift library products. Arrows below point from a
+`NettworkCore` contains seven Swift library products. Arrows below point from a
 module to a dependency:
 
 ```mermaid
@@ -47,23 +47,30 @@ flowchart TD
     ImportExport --> ContentSafety
     ImportExport --> WCC
     ImportExport --> Model
+    Contracts[FeatureContracts] --> ImportExport
+    Contracts --> ContentSafety
+    Contracts --> WCC
+    Contracts --> Model
 
     Presentation[NettworkApp Presentation] --> Model
     Presentation --> WCC
     Presentation --> ContentSafety
     Presentation --> ImportExport
+    Presentation --> Contracts
     Composition[NettworkApp Composition] --> Presentation
     Infrastructure[NettworkApp Infrastructure] --> CloudSync
     Infrastructure --> Persistence
     Infrastructure --> ContentSafety
     Infrastructure --> ImportExport
+    Infrastructure --> Contracts
 ```
 
 The exact package graph is declared in `Packages/NettworkCore/Package.swift`
 and enforced by `scripts/check-architecture.sh`. The same check keeps
 `NetworkModel` independent of change-control and infrastructure modules and
 forbids Presentation from importing CloudKit, SwiftData, `Persistence`, or
-`CloudSync`.
+`CloudSync`; `FeatureContracts` additionally may not import SwiftUI, UIKit, or
+AppKit.
 
 | Component | Responsibility |
 | --- | --- |
@@ -73,7 +80,8 @@ forbids Presentation from importing CloudKit, SwiftData, `Persistence`, or
 | `CloudSync` | CloudKit transport contracts, remote validation, conditional atomic writes, receipt recovery, staged transfer, sessions, and foreground synchronization |
 | `ContentSafety` | Bounded attachment decoding, allowlisting, sanitization, hashing, private staging, quotas, and evidence binding |
 | `ImportExport` | Exact CSV schemas, archive formats, bounded parsing, verification, staged transfer, approval, export, and restore |
-| `NettworkApp/Presentation` | SwiftUI shell, screens, feature models, and UI-facing contracts |
+| `FeatureContracts` | UI-facing service protocols and the snapshot, request, and error values that Presentation consumes and Infrastructure implements |
+| `NettworkApp/Presentation` | SwiftUI shell, screens, feature models, view state, and document presentation |
 | `NettworkApp/Infrastructure` | Production graph, organization authorities, SwiftData and CloudKit adapters, file operations, and platform bridges |
 | `NettworkApp/Composition` | App entry point, feature registry, dependency injection, routing, startup, and shutdown |
 
@@ -248,7 +256,7 @@ prove authenticity against a malicious archive writer.
 ## Build and deployment boundaries
 
 `project.yml` is the source of truth for the generated Xcode project. The iOS
-and macOS targets compile the same app source and all six package products, with
+and macOS targets compile the same app source and all seven package products, with
 platform-specific entitlements and unit-test bundles. `Nettwork.xcodeproj`,
 SwiftPM `.build`, DerivedData, test results, and coverage output are generated.
 
@@ -268,6 +276,7 @@ and deploys only `site/`.
 | Cloud record, remote validation, session, transport, or sync logic | `Packages/NettworkCore/Sources/CloudSync` |
 | Attachment admission, decoding, sanitization, or evidence binding | `Packages/NettworkCore/Sources/ContentSafety` |
 | CSV/archive format or staged transfer workflow | `Packages/NettworkCore/Sources/ImportExport` |
+| Feature service protocol, snapshot, or request type shared by screens and services | `Packages/NettworkCore/Sources/FeatureContracts` |
 | Screen, feature model, or SwiftUI document-picker presentation | `NettworkApp/Presentation` |
 | Production composition, file/document adapter, or Apple-platform bridge | `NettworkApp/Infrastructure` |
 

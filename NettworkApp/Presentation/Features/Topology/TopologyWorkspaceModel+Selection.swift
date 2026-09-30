@@ -1,3 +1,4 @@
+import FeatureContracts
 import NetworkModel
 
 extension TopologyWorkspaceModel {

@@ -1,12 +1,10 @@
 import ContentSafety
 import CoreGraphics
 import NetworkModel
-import Observation
-import SwiftUI
 import WorkspaceChangeControl
 
 @MainActor
-protocol FloorPlanFeatureService {
+public protocol FloorPlanFeatureService {
     /// Inspection is capability-bound: neither a source URL nor untrusted raw
     /// bytes cross into the feature layer.
     func inspectFloorPlanPDF(source: any OpaqueContentSource, authorization: AuthorizedOperationContext) async throws -> FloorPlanPDFInspection?
@@ -30,10 +28,10 @@ protocol FloorPlanFeatureService {
 
 /// Bounded PDF inspection output for a one-based UI page picker. Content
 /// safety independently validates the translated zero-based page at decode.
-struct FloorPlanPDFInspection: Equatable, Sendable {
-    let pageCount: Int
+public struct FloorPlanPDFInspection: Equatable, Sendable {
+    public let pageCount: Int
 
-    init(pageCount: Int) throws {
+    public init(pageCount: Int) throws {
         guard (1...ContentSafetyService.maximumPDFPages).contains(pageCount) else {
             throw FloorPlanPDFInspectionError.invalidPageCount
         }
@@ -41,7 +39,7 @@ struct FloorPlanPDFInspection: Equatable, Sendable {
     }
 }
 
-enum FloorPlanPDFInspectionError: Error, Equatable, Sendable {
+public enum FloorPlanPDFInspectionError: Error, Equatable, Sendable {
     case invalidPageCount
 }
 
@@ -49,11 +47,11 @@ enum FloorPlanPDFInspectionError: Error, Equatable, Sendable {
 /// main-actor isolated so the non-Sendable platform image cannot cross into an
 /// untrusted or concurrent feature boundary.
 @MainActor
-struct FloorPlanPreview {
-    let image: CGImage
-    let accessibilityDescription: String
+public struct FloorPlanPreview {
+    public let image: CGImage
+    public let accessibilityDescription: String
 
-    init(
+    public init(
         image: CGImage,
         accessibilityDescription: String = "Sanitized floor plan preview. Use the Anchor list for a text alternative to the marked locations."
     ) {
@@ -63,30 +61,17 @@ struct FloorPlanPreview {
 }
 
 @MainActor
-struct PersistedFloorPlanPresentation {
-    let anchors: [FloorPlanAnchor]
-    let preview: FloorPlanPreview?
+public struct PersistedFloorPlanPresentation {
+    public let anchors: [FloorPlanAnchor]
+    public let preview: FloorPlanPreview?
+
+    public init(anchors: [FloorPlanAnchor], preview: FloorPlanPreview?) {
+        self.anchors = anchors
+        self.preview = preview
+    }
 }
 
 @MainActor
-protocol FloorPlanPreviewRendering {
+public protocol FloorPlanPreviewRendering {
     func renderFloorPlan(_ descriptor: SanitizedContentDescriptor, authorization: AuthorizedOperationContext) async throws -> FloorPlanPreview
-}
-
-enum FloorPlanAttachmentState: Equatable {
-    case idle
-    case inspectingPDF
-    case awaitingPDFPageSelection(FloorPlanPDFInspection)
-    case sanitizing
-    case staged(SanitizedContentDescriptor)
-    case cleaningUp
-    case failed(String)
-}
-
-enum FloorPlanPreviewState {
-    case idle
-    case loading
-    case rendered(FloorPlanPreview)
-    case cancelled
-    case failed(String)
 }

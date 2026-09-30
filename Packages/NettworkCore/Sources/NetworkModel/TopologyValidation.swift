@@ -38,7 +38,7 @@ public enum TopologyValidationError: Error, Hashable, Sendable {
     case invalidRackPlacement(ObjectID)
 }
 
-public enum DefaultTopologyEngine: TopologyEngine {
+public enum DefaultTopologyEngine {
     public static func validate(_ topology: PhysicalTopology) throws {
         try validateReferences(topology)
         let ports = Dictionary(uniqueKeysWithValues: topology.ports.map { ($0.id, $0) })

@@ -7,7 +7,6 @@ on:
     paths:
       - "site/**"
       - ".github/workflows/pages.yml"
-      - "scripts/build-demo.sh"
       - "scripts/validate-demo.sh"
       - "Makefile"
       - "package.json"
@@ -40,11 +39,8 @@ jobs:
       - name: Install locked Node tooling
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Validate static demo source
+      - name: Validate static demo
         run: make check-web
-
-      - name: Build static demo
-        run: make build-demo
 
       - name: Configure GitHub Pages
         id: pages

@@ -1,6 +1,7 @@
 import CloudSync
 import ContentSafety
 import CryptoKit
+import FeatureContracts
 import Foundation
 import ImportExport
 import NetworkModel

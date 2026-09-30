@@ -1,3 +1,4 @@
+import FeatureContracts
 import SwiftUI
 
 struct WorkbenchPhysicalMode: View {

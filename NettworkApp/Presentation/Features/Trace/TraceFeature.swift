@@ -1,95 +1,9 @@
+import FeatureContracts
 import Foundation
 import NetworkModel
 import Observation
 import SwiftUI
 import WorkspaceChangeControl
-
-enum TraceDirection: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case forward
-    case reverse
-
-    var id: String { rawValue }
-}
-
-enum TraceSegmentKind: String, Sendable {
-    case cable
-    case internalLink
-    case transition
-    case unknown
-}
-
-struct TraceNodeSnapshot: Identifiable, Sendable {
-    let id: ObjectID
-    let deviceName: String
-    let portLabel: String
-    let faceName: String
-    let roomRack: String
-    let logicalContext: [String]
-}
-
-struct TraceSegmentSnapshot: Identifiable, Sendable {
-    let id: String
-    let kind: TraceSegmentKind
-    let label: String
-    let detail: String?
-    /// Present only when the trace provider has supplied a complete, typed
-    /// command and resource set for this exact segment. The operator still
-    /// supplies the reviewed title, ticket, and notes before staging.
-    let workOrderRequest: TopologyWorkOrderRequest?
-
-    init(
-        id: String,
-        kind: TraceSegmentKind,
-        label: String,
-        detail: String? = nil,
-        workOrderRequest: TopologyWorkOrderRequest? = nil
-    ) {
-        self.id = id
-        self.kind = kind
-        self.label = label
-        self.detail = detail
-        self.workOrderRequest = workOrderRequest
-    }
-}
-
-struct TraceBranchSnapshot: Identifiable, Sendable {
-    let id: ObjectID
-    let nodes: [TraceNodeSnapshot]
-    let segments: [TraceSegmentSnapshot]
-    let warnings: [String]
-    let termination: String
-
-    init(
-        id: ObjectID,
-        nodes: [TraceNodeSnapshot],
-        segments: [TraceSegmentSnapshot],
-        warnings: [String],
-        termination: String
-    ) {
-        self.id = id
-        self.nodes = nodes
-        self.segments = segments
-        self.warnings = warnings
-        self.termination = termination
-    }
-}
-
-struct TraceInspectionSnapshot: Sendable {
-    let startPortID: ObjectID
-    let branches: [TraceBranchSnapshot]
-    let globalWarnings: [String]
-    let isStale: Bool
-    let hasPendingWork: Bool
-    let hasConflict: Bool
-}
-
-protocol TraceInspecting: Sendable {
-    func inspect(startingAt portID: ObjectID, direction: TraceDirection, in namespace: PersistenceNamespace) async throws -> TraceInspectionSnapshot
-}
-
-protocol TraceIdentifierCopying: Sendable {
-    func copy(identifier: String) async
-}
 
 @MainActor
 @Observable

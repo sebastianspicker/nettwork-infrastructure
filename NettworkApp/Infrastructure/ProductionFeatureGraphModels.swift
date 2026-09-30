@@ -1,3 +1,5 @@
+import Foundation
+import ImportExport
 import NetworkModel
 import WorkspaceChangeControl
 
@@ -25,7 +27,13 @@ struct ProductionFeatureGraphModels {
     let labels: LabelSheetModel
 }
 
-extension ProductionFeatureGraphInput: AppFeatureOptionalCapabilitiesProviding {}
+extension ProductionFeatureGraphInput: AppFeatureOptionalCapabilitiesProviding {
+    /// Selected `.nettworkarchive` packages are always read by the platform
+    /// package adapter; the Transfer screen only receives this factory.
+    var archivePackageSource: ((URL) throws -> any ArchiveEntrySource)? {
+        { url in try ProductionArchivePackageEntrySource(url: url) }
+    }
+}
 
 @MainActor
 extension ProductionFeatureGraphFactory {

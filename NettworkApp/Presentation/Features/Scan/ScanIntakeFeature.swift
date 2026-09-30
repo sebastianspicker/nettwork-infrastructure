@@ -1,31 +1,9 @@
+import FeatureContracts
 import Foundation
 import NetworkModel
 import Observation
 import SwiftUI
 import WorkspaceChangeControl
-
-/// Camera availability is independent from the current capture lifecycle so
-/// typed, pasted, and keyboard-wedge scans stay usable on every platform.
-enum ScanCaptureAvailability: Equatable, Sendable {
-    case checking
-    case available
-    case unauthorized(String)
-    case unavailable(String)
-
-    var reason: String? {
-        switch self {
-        case .checking, .available:
-            nil
-        case .unauthorized(let reason), .unavailable(let reason):
-            reason
-        }
-    }
-
-    var canStart: Bool {
-        if case .available = self { return true }
-        return false
-    }
-}
 
 enum ScanCaptureLifecycle: Equatable, Sendable {
     case inactive
@@ -45,26 +23,6 @@ enum ScanResolutionState: Equatable, Sendable {
 
 enum ScanDestination: Equatable, Sendable {
     case objectDetails(ObjectID)
-}
-
-struct OpaqueScan: Equatable, Sendable { let objectID: ObjectID }
-
-enum OpaqueScanParser {
-    static func parse(_ rawValue: String) -> OpaqueScan? {
-        guard let id = ObjectLink.objectID(from: rawValue) else { return nil }
-        return OpaqueScan(objectID: id)
-    }
-}
-
-protocol ScanCapturing: Sendable {
-    func availability() async -> ScanCaptureAvailability
-    func requestPermission() async -> ScanCaptureAvailability
-    func start() async throws
-    func stop() async
-}
-
-protocol ScannedObjectResolving: Sendable {
-    func resolve(_ id: ObjectID, in namespace: PersistenceNamespace) async throws -> Bool
 }
 
 /// Prevents simultaneous mirror reads while preserving the newest input as the
@@ -187,12 +145,12 @@ final class ScanIntakeModel {
 
     func accept(_ rawValue: String) async {
         let attempt = nextResolutionAttempt()
+        destination = nil
         guard let scan = OpaqueScanParser.parse(rawValue) else {
             resolutionState = .invalid("This is not a canonical opaque Nettwork object label.")
             return
         }
 
-        destination = nil
         resolutionState = .resolving(scan.objectID)
         await resolutionQueue.acquire()
         guard attempt == resolutionAttempt else {

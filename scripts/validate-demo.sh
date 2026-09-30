@@ -10,6 +10,16 @@ fail() {
     exit 1
 }
 
+command -v rg >/dev/null 2>&1 || fail "required tool 'rg' is not installed or not on PATH"
+
+# Returns 0 on a match and 1 on no match; any rg error fails validation.
+rg_matches() {
+    local status=0
+    rg "$@" || status=$?
+    ((status < 2)) || fail "rg failed with exit $status"
+    ((status == 0))
+}
+
 [[ -d "$site_dir" ]] || fail "missing site directory"
 
 required_files=(
@@ -34,19 +44,19 @@ while IFS= read -r -d '' file_path; do
     esac
 done < <(find "$site_dir" -type f -print0)
 
-if rg -n -i --glob '!*.png' \
+if rg_matches -n -i --glob '!*.png' \
     '(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]+|AKIA[[:alnum:]]{16})' \
     "$site_dir"; then
     fail "possible production secret found in site artifact"
 fi
 
-if rg -n --glob '*.{html,css,js}' \
+if rg_matches -n --glob '*.{html,css,js}' \
     '(?:src|href|poster|action)[[:space:]]*=[[:space:]]*"[[:space:]]*/|url\([[:space:]]*"?/' \
     "$site_dir"; then
     fail "root-absolute asset URL found; use a site-relative path"
 fi
 
-if rg -n -i --glob '*.{html,css,js}' \
+if rg_matches -n -i --glob '*.{html,css,js}' \
     'screenshot' \
     "$site_dir"; then
     fail "runtime screenshot dependency found in site artifact"

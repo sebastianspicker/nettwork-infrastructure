@@ -25,6 +25,7 @@ The package declares no third-party package dependencies.
 | `CloudSync` | CloudKit contracts, remote validation, sessions, conditional writes, recovery receipts, staged transfer, and foreground sync | `NetworkModel`, `WorkspaceChangeControl`, `Persistence` |
 | `ContentSafety` | Bounded attachment decoding, sanitization, hashing, private staging, quota, and evidence binding | `NetworkModel`, `WorkspaceChangeControl` |
 | `ImportExport` | Exact CSV/archive formats, bounded parsing, staging, verification, approval, export, and restore | `NetworkModel`, `WorkspaceChangeControl`, `ContentSafety` |
+| `FeatureContracts` | UI-facing feature service protocols and their snapshot, request, and error values | `NetworkModel`, `WorkspaceChangeControl`, `ContentSafety`, `ImportExport` |
 
 The manifest and `scripts/check-architecture.sh` enforce this dependency
 direction. See [the architecture guide](../../docs/ARCHITECTURE.md) for the app
@@ -43,6 +44,8 @@ Use the narrowest product that owns the required behavior:
   mutation, session, or synchronization behavior.
 - Add `ContentSafety` for bounded attachment admission and evidence binding.
 - Add `ImportExport` for CSV/archive formats and staged workspace transfer.
+- Add `FeatureContracts` for the protocols and values shared by app screens and
+  the services that back them.
 
 `CloudSync` provides transport and synchronization contracts but does not choose
 an organization CloudKit container, account, share policy, schema deployment,

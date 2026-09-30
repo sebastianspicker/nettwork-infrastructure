@@ -1,4 +1,5 @@
 import ContentSafety
+import FeatureContracts
 import Foundation
 import ImportExport
 import NetworkModel
@@ -40,6 +41,7 @@ struct AppFeatureComposition {
     var csvExportDestination: (any CSVWorkspaceExportDestination)? { optionalCapabilities.csvExportDestination }
     var archiveExportAuthorization: (() -> AuthorizedOperationContext?)? { optionalCapabilities.archiveExportAuthorization }
     var archiveRestoreSource: (() -> (any ArchiveEntrySource)?)? { optionalCapabilities.archiveRestoreSource }
+    var archivePackageSource: ((URL) throws -> any ArchiveEntrySource)? { optionalCapabilities.archivePackageSource }
     var archiveRestoreAuthorization: (() -> AuthorizedOperationContext?)? { optionalCapabilities.archiveRestoreAuthorization }
     var workspaceShareMetadata: (() -> Data?)? { optionalCapabilities.workspaceShareMetadata }
     var onWorkspaceInvitationPrepared: ((WorkspaceInviteReceipt) -> Void)? { optionalCapabilities.onWorkspaceInvitationPrepared }
@@ -97,6 +99,7 @@ protocol AppFeatureOptionalCapabilitiesProviding {
     var csvExportDestination: (any CSVWorkspaceExportDestination)? { get }
     var archiveExportAuthorization: (() -> AuthorizedOperationContext?)? { get }
     var archiveRestoreSource: (() -> (any ArchiveEntrySource)?)? { get }
+    var archivePackageSource: ((URL) throws -> any ArchiveEntrySource)? { get }
     var archiveRestoreAuthorization: (() -> AuthorizedOperationContext?)? { get }
     var workspaceShareMetadata: (() -> Data?)? { get }
     var onWorkspaceInvitationPrepared: ((WorkspaceInviteReceipt) -> Void)? { get }
@@ -114,6 +117,7 @@ struct AppFeatureOptionalCapabilities {
     let csvExportDestination: (any CSVWorkspaceExportDestination)?
     let archiveExportAuthorization: (() -> AuthorizedOperationContext?)?
     let archiveRestoreSource: (() -> (any ArchiveEntrySource)?)?
+    let archivePackageSource: ((URL) throws -> any ArchiveEntrySource)?
     let archiveRestoreAuthorization: (() -> AuthorizedOperationContext?)?
     let workspaceShareMetadata: (() -> Data?)?
     let onWorkspaceInvitationPrepared: ((WorkspaceInviteReceipt) -> Void)?
@@ -129,6 +133,7 @@ struct AppFeatureOptionalCapabilities {
         csvExportDestination = source.csvExportDestination
         archiveExportAuthorization = source.archiveExportAuthorization
         archiveRestoreSource = source.archiveRestoreSource
+        archivePackageSource = source.archivePackageSource
         archiveRestoreAuthorization = source.archiveRestoreAuthorization
         workspaceShareMetadata = source.workspaceShareMetadata
         onWorkspaceInvitationPrepared = source.onWorkspaceInvitationPrepared
@@ -302,6 +307,7 @@ private struct AppFeatureDestinationFactory {
                 csvExportDestination: composition.csvExportDestination,
                 exportAuthorization: composition.archiveExportAuthorization,
                 restoreSource: composition.archiveRestoreSource,
+                archivePackageSource: composition.archivePackageSource,
                 restoreAuthorization: composition.archiveRestoreAuthorization
             ))
     }

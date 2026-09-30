@@ -1,6 +1,6 @@
 import Foundation
 
-public enum DefaultPathTraceService: PathTraceService {
+public enum DefaultPathTraceService {
     /// Compatibility contract: this preserves the original physical-only
     /// result shape and includes every documented cable/link regardless of
     /// operational status. Use `traceRich` for warnings and context.
