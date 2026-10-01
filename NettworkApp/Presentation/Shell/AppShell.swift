@@ -24,10 +24,10 @@ struct AppShell: View {
 
 private struct WorkbenchAppShell: View {
     let router: AppRouter
-    @Environment(AppDependencies.self) private var dependencies
+    @Environment(WorkspaceShellState.self) private var workspace
 
     var body: some View {
-        dependencies.features.workbench(router: router)
+        workspace.features.workbench(router: router)
             .appDestinations()
             .toolbar {
                 ToolbarItem(placement: .automatic) {
@@ -130,24 +130,24 @@ enum CompactMoreGroup: String, CaseIterable, Identifiable {
 
 private struct AppRouteView: View {
     let route: AppRoute
-    @Environment(AppDependencies.self) private var dependencies
+    @Environment(WorkspaceShellState.self) private var workspace
 
     var body: some View {
         switch route {
         case .section(let section):
-            dependencies.features.destination(for: section)
+            workspace.features.destination(for: section)
         case .object(let identifier):
-            dependencies.features.destination(for: ObjectID(identifier))
+            workspace.features.destination(for: ObjectID(identifier))
         }
     }
 }
 
 private struct FeatureDestinationScreen: View {
     let section: AppSection
-    @Environment(AppDependencies.self) private var dependencies
+    @Environment(WorkspaceShellState.self) private var workspace
 
     var body: some View {
-        dependencies.features.destination(for: section)
+        workspace.features.destination(for: section)
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -160,27 +160,27 @@ private struct FeatureDestinationScreen: View {
 }
 
 private struct WorkspaceSyncButton: View {
-    @Environment(AppDependencies.self) private var dependencies
+    @Environment(WorkspaceShellState.self) private var workspace
 
     var body: some View {
         Menu {
-            Text(dependencies.syncStatus.title)
-            Text(dependencies.syncStatus.detail)
+            Text(workspace.syncStatus.title)
+            Text(workspace.syncStatus.detail)
             Divider()
             Button {
-                Task { await dependencies.synchronizeForeground() }
+                Task { await workspace.synchronizeForeground() }
             } label: {
                 Label("Sync now", systemImage: "arrow.triangle.2.circlepath")
             }
-            .disabled(dependencies.syncStatus == .loading || dependencies.syncStatus == .syncing)
+            .disabled(workspace.syncStatus == .loading || workspace.syncStatus == .syncing)
         } label: {
             #if os(macOS)
-                StatusIndicator(status: dependencies.syncStatus, style: .inline)
+                StatusIndicator(status: workspace.syncStatus, style: .inline)
             #else
-                StatusIndicator(status: dependencies.syncStatus)
+                StatusIndicator(status: workspace.syncStatus)
             #endif
         }
-        .help(dependencies.syncStatus.detail)
+        .help(workspace.syncStatus.detail)
         .accessibilityIdentifier("workspace.sync-status")
         .accessibilityHint("View synchronization status or sync the workspace now.")
     }

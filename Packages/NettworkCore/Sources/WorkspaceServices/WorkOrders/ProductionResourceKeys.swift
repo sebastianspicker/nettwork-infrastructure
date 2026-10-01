@@ -1,29 +1,7 @@
-import CloudSync
 import FeatureContracts
 import Foundation
 import NetworkModel
-import Persistence
 import WorkspaceChangeControl
-
-/// Accepts only a payload that round-trips through the deterministic Cloud
-/// codec. Archive and mirror readers use this before trusting record fields.
-func canonicalDecoded<Value: Codable>(_ type: Value.Type, from payload: Data) -> Value? {
-    guard let value = try? CloudDeterministicCoding.decode(type, from: payload),
-        (try? CloudDeterministicCoding.encode(value)) == payload
-    else {
-        return nil
-    }
-    return value
-}
-
-extension ProductionFeatureMutationAuthority {
-    func finalizeStagedDraft(_ draft: WorkOrderDraft, trusted: TrustedProductionSession, in namespace: PersistenceNamespace) async throws -> ObjectID {
-        try requireStructurallyValid(draft)
-        try await sessionAuthorizer.revalidate(trusted)
-        await draftStore.store(draft, in: namespace)
-        return draft.id
-    }
-}
 
 extension PlannedWorkOperation {
     var productionResourceKeys: Set<ResourceKey> {

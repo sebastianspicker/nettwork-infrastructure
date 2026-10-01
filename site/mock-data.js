@@ -27,6 +27,7 @@ window.NettworkDemo = {
     "desk-4b-17": {
       id: "desk-4b-17",
       name: "Desk 4B-17",
+      addresses: ["10.42.120.17"],
       kind: "Endpoint",
       status: "Connected",
       icon: "i-laptop",

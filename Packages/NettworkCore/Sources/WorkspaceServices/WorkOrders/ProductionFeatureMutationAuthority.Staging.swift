@@ -266,3 +266,12 @@ extension ProductionFeatureMutationAuthority {
         return draft.id
     }
 }
+
+extension ProductionFeatureMutationAuthority {
+    func finalizeStagedDraft(_ draft: WorkOrderDraft, trusted: TrustedProductionSession, in namespace: PersistenceNamespace) async throws -> ObjectID {
+        try requireStructurallyValid(draft)
+        try await sessionAuthorizer.revalidate(trusted)
+        await draftStore.store(draft, in: namespace)
+        return draft.id
+    }
+}

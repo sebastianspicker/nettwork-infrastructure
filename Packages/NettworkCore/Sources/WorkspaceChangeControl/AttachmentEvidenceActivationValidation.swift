@@ -45,8 +45,9 @@ extension AuthoritativeActivationMutationValidator {
     ) throws -> WorkOrder {
         guard let assertion = mutation.readAssertions.first, assertion.recordType == WorkspaceRecordType.workOrder,
             assertion.schemaVersion == 1,
-            let workOrder = try? StableActivationPayloadCoding.decode(WorkOrder.self, from: assertion.encodedRecord),
-            (try? StableActivationPayloadCoding.encode(workOrder)) == assertion.encodedRecord,
+            let workOrder = try? CanonicalJSONCoding.decode(WorkOrder.self, from: assertion.encodedRecord),
+            let reencoded = try? CanonicalJSONCoding.encode(workOrder),
+            CanonicalPayloadComparison.matches(stored: assertion.encodedRecord, reencoded: reencoded),
             assertion.resourceKey == .object(workOrder.id), let intentDigest = workOrder.intentDigest,
             [.reserved, .approved, .executing].contains(workOrder.status),
             let reservation = workOrder.reservation, reservation.ownerID == mutation.actor.actorID,
@@ -105,8 +106,8 @@ extension AuthoritativeActivationMutationValidator {
         _ mutation: AuthoritativeActivationMutation,
         bindingSave: AuthoritativeRecordSave, workOrder: WorkOrder
     ) throws -> AttachmentEvidenceBindingRecord {
-        guard let binding = try? StableActivationPayloadCoding.decode(AttachmentEvidenceBindingRecord.self, from: bindingSave.encodedRecord),
-            (try? StableActivationPayloadCoding.encode(binding)) == bindingSave.encodedRecord,
+        guard let binding = try? CanonicalJSONCoding.decode(AttachmentEvidenceBindingRecord.self, from: bindingSave.encodedRecord),
+            (try? CanonicalJSONCoding.encode(binding)) == bindingSave.encodedRecord,
             binding.resourceKey == bindingSave.resourceKey, binding.workOrderID == workOrder.id,
             binding.intentDigest == mutation.intentDigest, binding.operationID == mutation.operationID,
             binding.auditEventID == mutation.auditEvent.id, binding.boundAt == mutation.actor.capturedAt,
@@ -125,8 +126,8 @@ extension AuthoritativeActivationMutationValidator {
             let releaseSave = businessSaves.first(where: {
                 $0.recordType == WorkspaceRecordType.attachmentEvidenceReservationRelease
             }),
-            let release = try? StableActivationPayloadCoding.decode(AttachmentEvidenceReservationRelease.self, from: releaseSave.encodedRecord),
-            (try? StableActivationPayloadCoding.encode(release)) == releaseSave.encodedRecord,
+            let release = try? CanonicalJSONCoding.decode(AttachmentEvidenceReservationRelease.self, from: releaseSave.encodedRecord),
+            (try? CanonicalJSONCoding.encode(release)) == releaseSave.encodedRecord,
             release.resourceKey == releaseSave.resourceKey, release.id == binding.reservationID,
             release.workOrderID == binding.workOrderID, release.attachmentID == binding.attachmentID,
             release.reservedCount == 1, release.reservedBytes == binding.provenance.byteCount,
@@ -145,8 +146,8 @@ extension AuthoritativeActivationMutationValidator {
             let ledgerSave = businessSaves.first(where: {
                 $0.recordType == WorkspaceRecordType.attachmentEvidenceQuotaLedger
             }),
-            let ledger = try? StableActivationPayloadCoding.decode(AttachmentEvidenceQuotaLedger.self, from: ledgerSave.encodedRecord),
-            (try? StableActivationPayloadCoding.encode(ledger)) == ledgerSave.encodedRecord,
+            let ledger = try? CanonicalJSONCoding.decode(AttachmentEvidenceQuotaLedger.self, from: ledgerSave.encodedRecord),
+            (try? CanonicalJSONCoding.encode(ledger)) == ledgerSave.encodedRecord,
             ledger.resourceKey == ledgerSave.resourceKey, ledger.workOrderID == binding.workOrderID,
             ledger.updatedAt == mutation.actor.capturedAt
         else {
@@ -185,7 +186,7 @@ extension AuthoritativeActivationMutationValidator {
     ) throws -> AttachmentEvidenceQuotaLedger {
         guard priorLedger.recordType == WorkspaceRecordType.attachmentEvidenceQuotaLedger,
             priorLedger.schemaVersion == 1,
-            let decoded = try? StableActivationPayloadCoding.decode(AttachmentEvidenceQuotaLedger.self, from: priorLedger.encodedRecord),
+            let decoded = try? CanonicalJSONCoding.decode(AttachmentEvidenceQuotaLedger.self, from: priorLedger.encodedRecord),
             decoded.resourceKey == key
         else {
             throw AuthoritativeActivationMutationValidationError.invalidActivationRecordSet(key)

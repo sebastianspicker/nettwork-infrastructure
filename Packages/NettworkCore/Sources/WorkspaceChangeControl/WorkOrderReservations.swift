@@ -113,8 +113,8 @@ public enum ResourceReservationLockFactory {
         let locks = try makeLocks(for: workOrder, expiresAt: expiresAt, observedAt: observedAt)
         return try locks.map { lock in
             AuthoritativeRecordSave(
-                resourceKey: lock.id, recordType: WorkspaceRecordType.Legacy.resourceReservationLock,
-                schemaVersion: 1, encodedRecord: try encode(lock))
+                resourceKey: lock.id, recordType: WorkspaceRecordType.resourceReservationLockSource,
+                schemaVersion: 1, encodedRecord: try CanonicalJSONCoding.encode(lock))
         }
     }
 
@@ -130,8 +130,8 @@ public enum ResourceReservationLockFactory {
                 reservationID: reservation.id, ownerID: reservation.ownerID, intentDigest: intentDigest,
                 expiresAt: reservation.acknowledgedByCloudKit?.expiresAt ?? deletedAt)
             return AuthoritativeTombstone(
-                resourceKey: lock.id, recordType: WorkspaceRecordType.Legacy.resourceReservationLock,
-                deletedAt: deletedAt, encodedTombstone: try encode(lock))
+                resourceKey: lock.id, recordType: WorkspaceRecordType.resourceReservationLockSource,
+                deletedAt: deletedAt, encodedTombstone: try CanonicalJSONCoding.encode(lock))
         }
     }
 
@@ -160,12 +160,5 @@ public enum ResourceReservationLockFactory {
                 reservationID: reservation.id, ownerID: reservation.ownerID, intentDigest: intentDigest,
                 expiresAt: expiresAt)
         }
-    }
-
-    private static func encode<T: Encodable>(_ value: T) throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return try encoder.encode(value)
     }
 }

@@ -80,7 +80,6 @@ xcuserdata/
 *.secret
 
 # Local repository tooling
-/.repowise/
 /.serena/
 /.codegraph/
 /.mcp.json

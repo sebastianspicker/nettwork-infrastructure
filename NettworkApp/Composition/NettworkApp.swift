@@ -41,7 +41,7 @@ private struct NettworkSceneRoot: View {
 
     private var productionRoot: some View {
         AppShell(router: launch.router)
-            .environment(launch.dependencies)
+            .environment(launch.dependencies.shell)
             .tint(.nettworkAccent)
             #if os(iOS)
                 .background(IOSPresentationContextAnchor(context: presentationContext).frame(width: 0, height: 0))

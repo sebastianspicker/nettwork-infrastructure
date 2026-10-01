@@ -4,7 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="description" content="Nettwork representative mock-data workbench demo." />
+    <meta
+      name="description"
+      content="Network inventory, cabling, racks, and IP address management. Representative mock-data workbench demo."
+    />
     <link rel="icon" href="assets/nettwork-icon-master.png" />
     <link rel="stylesheet" href="styles.css" />
     <title>Nettwork workbench demo</title>
@@ -28,10 +31,11 @@
                 id="global-search"
                 type="search"
                 autocomplete="off"
+                aria-controls="search-results"
                 placeholder="Search demo assets or addresses"
               /><kbd>⌘K</kbd></label
             >
-            <div id="search-results" class="search-results" hidden></div>
+            <div id="search-results" class="search-results" role="region" aria-label="Search results" hidden></div>
           </div>
           <div class="top-actions">
             <button id="sync-button" class="sync-button" type="button">
@@ -210,6 +214,7 @@
       </symbol>
     </svg>
     <script src="mock-data.js"></script>
+    <script src="search.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -106,16 +106,11 @@ private struct CloudMutationRecordAssembly {
 
 public enum CloudDeterministicCoding {
     public static func encode<T: Encodable>(_ value: T) throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return try encoder.encode(value)
+        try CanonicalJSONCoding.encode(value)
     }
 
     public static func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(type, from: data)
+        try CanonicalJSONCoding.decode(type, from: data)
     }
 }
 

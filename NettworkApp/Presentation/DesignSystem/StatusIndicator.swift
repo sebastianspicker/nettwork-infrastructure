@@ -57,10 +57,10 @@ struct StatusBadge: View {
 }
 
 struct StatusIndicator: View {
-    let status: AppDependencies.SyncStatus
+    let status: WorkspaceShellState.SyncStatus
     let style: StatusIndicatorStyle
 
-    init(status: AppDependencies.SyncStatus, style: StatusIndicatorStyle = .iconOnly) {
+    init(status: WorkspaceShellState.SyncStatus, style: StatusIndicatorStyle = .iconOnly) {
         self.status = status
         self.style = style
     }

@@ -45,10 +45,10 @@ final class InventorySearchIndexMaintenanceBehaviorTests: XCTestCase {
             medium: .copper, connector: .rj45, kind: .patchCord, status: .installed
         )
         let portRecord = try mirrorRecord(
-            type: "NettworkPort", key: .object(port.id), payload: MirroredAuthoritativeCoding.encode(port), namespace: namespace
+            type: "NettworkPort", key: .object(port.id), payload: CanonicalJSONCoding.encode(port), namespace: namespace
         )
         let cableRecord = try mirrorRecord(
-            type: "NettworkCable", key: .object(cable.id), payload: MirroredAuthoritativeCoding.encode(cable), namespace: namespace
+            type: "NettworkCable", key: .object(cable.id), payload: CanonicalJSONCoding.encode(cable), namespace: namespace
         )
 
         let portSeeds = try InventorySearchIndexBuilder.directDependencySeeds([portRecord])
@@ -188,7 +188,7 @@ final class InventorySearchIndexMaintenanceBehaviorTests: XCTestCase {
         let timestamp = Date(timeIntervalSince1970: revision)
         return LocalMirrorRecord(
             namespace: namespace, resourceKey: .object(id), recordType: "NettworkDevice",
-            schemaVersion: 1, payload: try MirroredAuthoritativeCoding.encode(device),
+            schemaVersion: 1, payload: try CanonicalJSONCoding.encode(device),
             systemFields: Data("fields-\(revision)".utf8), changeTag: "tag-\(revision)",
             isTombstone: false, serverModifiedAt: timestamp, verifiedAt: timestamp)
     }
@@ -199,7 +199,7 @@ final class InventorySearchIndexMaintenanceBehaviorTests: XCTestCase {
         let deviceType = DeviceType(id: id, name: "Switch", kind: .switchDevice)
         return LocalMirrorRecord(
             namespace: namespace, resourceKey: .object(id), recordType: "NettworkDeviceType",
-            schemaVersion: 1, payload: try MirroredAuthoritativeCoding.encode(deviceType),
+            schemaVersion: 1, payload: try CanonicalJSONCoding.encode(deviceType),
             systemFields: Data("type-fields".utf8), changeTag: "type-tag", isTombstone: false,
             serverModifiedAt: .distantPast, verifiedAt: .distantPast)
     }

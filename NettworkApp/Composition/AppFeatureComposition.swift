@@ -93,7 +93,7 @@ struct AppFeatureOptionalCapabilities {
 }
 
 @MainActor
-final class AppFeatureRegistry {
+final class AppFeatureRegistry: AppDestinationProviding {
     typealias SectionBuilder = (AppSection) -> AnyView
     typealias ObjectBuilder = (ObjectID) -> AnyView
     typealias WorkbenchBuilder = (AppRouter) -> AnyView

@@ -59,9 +59,9 @@ public struct AuthoritativeMutation: Codable, Hashable, Sendable {
         self.evidenceHashes = evidenceHashes
         self.receipt =
             receipt ?? OperationReceipt(workspaceZone: workspaceZone, operationID: operationID, intentDigest: intentDigest, auditEventID: auditEvent.id)
-        self.encodedWorkOrder = try encodedWorkOrder ?? StableMutationPayloadCoding.encode(workOrder)
-        self.encodedAuditEvent = try encodedAuditEvent ?? StableMutationPayloadCoding.encode(auditEvent)
-        self.encodedReceipt = try encodedReceipt ?? StableMutationPayloadCoding.encode(self.receipt)
+        self.encodedWorkOrder = try encodedWorkOrder ?? CanonicalJSONCoding.encode(workOrder)
+        self.encodedAuditEvent = try encodedAuditEvent ?? CanonicalJSONCoding.encode(auditEvent)
+        self.encodedReceipt = try encodedReceipt ?? CanonicalJSONCoding.encode(self.receipt)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -114,21 +114,6 @@ public struct AuthoritativeMutation: Codable, Hashable, Sendable {
         try container.encode(encodedWorkOrder, forKey: .encodedWorkOrder)
         try container.encode(encodedAuditEvent, forKey: .encodedAuditEvent)
         try container.encode(encodedReceipt, forKey: .encodedReceipt)
-    }
-}
-
-enum StableMutationPayloadCoding {
-    static func encode<T: Encodable>(_ value: T) throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return try encoder.encode(value)
-    }
-
-    static func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(type, from: data)
     }
 }
 

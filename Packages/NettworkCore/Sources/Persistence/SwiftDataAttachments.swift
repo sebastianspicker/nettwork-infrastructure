@@ -42,7 +42,7 @@ extension SwiftDataPersistenceStore {
 
     func attachmentEvidenceBinding(_ record: LocalMirrorRecord) throws -> AttachmentEvidenceBindingRecord {
         guard let payload = record.payload else { throw PersistenceStoreError.invalidMirrorRecord(record.resourceKey) }
-        let binding = try MirroredAuthoritativeCoding.decode(AttachmentEvidenceBindingRecord.self, from: payload)
+        let binding = try CanonicalJSONCoding.decode(AttachmentEvidenceBindingRecord.self, from: payload)
         guard binding.resourceKey == record.resourceKey else { throw PersistenceStoreError.invalidMirrorRecord(record.resourceKey) }
         return binding
     }
@@ -52,7 +52,7 @@ extension SwiftDataPersistenceStore {
         guard let record = try storedLocalMirror(for: key, in: namespace), !record.isTombstone, record.recordType == WorkspaceRecordType.operationReceipt,
             let payload = record.payload
         else { throw PersistenceStoreError.invalidReceipt(binding.operationID) }
-        let receipt = try MirroredAuthoritativeCoding.decode(OperationReceipt.self, from: payload)
+        let receipt = try CanonicalJSONCoding.decode(OperationReceipt.self, from: payload)
         guard receipt.operationID == binding.operationID, receipt.intentDigest == binding.intentDigest, receipt.auditEventID == binding.auditEventID else {
             throw PersistenceStoreError.invalidReceipt(binding.operationID)
         }

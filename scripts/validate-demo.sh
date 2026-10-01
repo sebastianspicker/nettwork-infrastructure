@@ -26,6 +26,7 @@ required_files=(
     "index.html"
     "styles.css"
     "mock-data.js"
+    "search.js"
     "app.js"
     "assets/nettwork-icon-master.png"
 )

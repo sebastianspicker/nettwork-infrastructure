@@ -26,8 +26,8 @@ extension AuthoritativeActivationMutationValidator {
             sentinelSave.schemaVersion == 1, let current = state.currentSentinel,
             current.recordType == AuthoritativeActivationMutation.workspaceSentinelRecordType,
             current.schemaVersion == 1,
-            let currentWorkspace = try? StableActivationPayloadCoding.decode(WorkspaceSentinelPayload.self, from: current.encodedRecord),
-            let proposedWorkspace = try? StableActivationPayloadCoding.decode(WorkspaceSentinelPayload.self, from: sentinelSave.encodedRecord),
+            let currentWorkspace = try? CanonicalJSONCoding.decode(WorkspaceSentinelPayload.self, from: current.encodedRecord),
+            let proposedWorkspace = try? CanonicalJSONCoding.decode(WorkspaceSentinelPayload.self, from: sentinelSave.encodedRecord),
             currentWorkspace.matches(mutation.workspaceZone),
             proposedWorkspace.matches(mutation.workspaceZone)
         else {
@@ -81,14 +81,14 @@ extension AuthoritativeActivationMutationValidator {
         let invalidKey = bindingSaves.first?.resourceKey ?? mutation.bootstrapSentinelResourceKey
         guard bindingSaves.count == 1, mutation.saves.count == 2, mutation.readAssertions.count == 1,
             let bindingSave = bindingSaves.first,
-            let binding = try? StableActivationPayloadCoding.decode(FloorPlanAssetBindingRecord.self, from: bindingSave.encodedRecord),
+            let binding = try? CanonicalJSONCoding.decode(FloorPlanAssetBindingRecord.self, from: bindingSave.encodedRecord),
             let asset = bindingSave.recordAsset, binding.resourceKey == bindingSave.resourceKey,
             binding.assetMetadata == asset.metadata, binding.intentDigest == mutation.intentDigest,
             binding.operationID == mutation.operationID, binding.auditEventID == mutation.auditEvent.id,
             let workOrderAssertion = mutation.readAssertions.first,
             workOrderAssertion.resourceKey == .object(binding.workOrderID),
             workOrderAssertion.recordType == WorkspaceRecordType.workOrder, workOrderAssertion.schemaVersion == 1,
-            let workOrder = try? StableActivationPayloadCoding.decode(WorkOrder.self, from: workOrderAssertion.encodedRecord),
+            let workOrder = try? CanonicalJSONCoding.decode(WorkOrder.self, from: workOrderAssertion.encodedRecord),
             workOrder.id == binding.workOrderID, workOrder.kind == .floorPlan,
             workOrder.status == .completed, workOrder.intentDigest == binding.intentDigest
         else {
@@ -112,7 +112,7 @@ extension AuthoritativeActivationMutationValidator {
         guard mutation.readAssertions.count == 1, let assertion = sessionAssertions.first,
             assertion.recordType == AuthoritativeActivationMutation.transferSessionRecordType,
             assertion.schemaVersion == 1,
-            let session = try? StableActivationPayloadCoding.decode(TransferSessionAssertionPayload.self, from: assertion.encodedRecord),
+            let session = try? CanonicalJSONCoding.decode(TransferSessionAssertionPayload.self, from: assertion.encodedRecord),
             assertion.resourceKey == .string("workspace-transfer-session:\(session.transferID.description)"),
             session.isComplete, mutation.saves.count == 1, mutation.tombstones.isEmpty,
             case .empty = sentinel.currentWorkspace.lifecycle,

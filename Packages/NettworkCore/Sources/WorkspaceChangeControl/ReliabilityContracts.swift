@@ -33,12 +33,6 @@ public struct BoundedOperationPolicy: Codable, Hashable, Sendable {
     }
 }
 
-public enum CooperativeCancellation {
-    public static func check() throws {
-        try Task.checkCancellation()
-    }
-}
-
 /// A requirement supplied by a caller or deployment policy, not evidence that a target
 /// has been achieved.
 public struct OperationPerformanceBudget: Codable, Hashable, Sendable {

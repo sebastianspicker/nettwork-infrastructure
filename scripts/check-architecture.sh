@@ -19,9 +19,16 @@ fail() {
     failures=1
 }
 
+# Matches attributed imports (`@preconcurrency`, `@_exported`, `@testable`) and
+# declaration imports (`import class SwiftData.ModelContext`).
+import_pattern() {
+    printf '%s' '^\s*(@[A-Za-z_]+(\([^)]*\))?\s+)*import\s+((typealias|struct|class|enum|protocol|let|var|func|actor)\s+)?('"$1"')(\.|\s|$)'
+}
+
 forbid_imports() {
     local description="$1"
-    local pattern="$2"
+    local pattern
+    pattern="$(import_pattern "$2")"
     shift 2
     local matches status=0
     matches="$(rg -n --glob '*.swift' "$pattern" "$@")" || status=$?
@@ -69,26 +76,27 @@ check_package_dependencies() {
     '
 }
 
-# Presentation and Platform compile into one app module, so imports cannot
-# keep screens away from Platform adapters; their type names can.
-check_platform_types_stay_out_of_presentation() {
+# Presentation, Platform, and Composition compile into one app module, so
+# imports cannot keep the layers apart; their type names can.
+forbid_type_names() {
+    local source_layer="$1" target_layer="$2" description="$3"
     local names matches status=0
     names="$(rg -oN --no-filename --glob '*.swift' -r '$1' \
-        '^\s*(?:(?:public|private|fileprivate|internal|final|nonisolated|@MainActor|@unchecked)\s+)*(?:class|struct|enum|actor|protocol|typealias)\s+(\w+)' \
-        NettworkApp/Platform)" || status=$?
+        '^\s*(?:(?:@\w+(?:\([^)]*\))?|public|private|fileprivate|internal|final|nonisolated|open|package|indirect)\s+)*(?:class|struct|enum|actor|protocol|typealias)\s+(\w+)' \
+        "NettworkApp/$source_layer")" || status=$?
     if ((status > 1)); then
-        echo "architecture: rg failed with exit $status while collecting Platform type names" >&2
+        echo "architecture: rg failed with exit $status while collecting $source_layer type names" >&2
         exit 1
     fi
     [[ -n "$names" ]] || return 0
     status=0
-    matches="$(printf '%s\n' "$names" | sort -u | rg -n -w -F --glob '*.swift' -f - NettworkApp/Presentation)" || status=$?
+    matches="$(printf '%s\n' "$names" | sort -u | rg -n -w -F --glob '*.swift' -f - "NettworkApp/$target_layer")" || status=$?
     if ((status > 1)); then
-        echo "architecture: rg failed with exit $status while checking Platform types in Presentation" >&2
+        echo "architecture: rg failed with exit $status while checking $source_layer types in $target_layer" >&2
         exit 1
     fi
     if [[ -n "$matches" ]]; then
-        fail "Presentation must not reference Platform adapter types; inject them through Composition"
+        fail "$description"
         printf '%s\n' "$matches" >&2
     fi
 }
@@ -97,35 +105,60 @@ if ! check_package_dependencies; then
     failures=1
 fi
 
+sources=Packages/NettworkCore/Sources
+
+forbid_imports \
+    "NettworkCore package targets must not import SwiftUI, UIKit, or AppKit" \
+    'SwiftUI|SwiftUICore|UIKit|AppKit' \
+    "$sources"
+
+# CloudSync is the CloudKit adapter; no other package target may touch CloudKit.
+forbid_imports \
+    "Only CloudSync may import CloudKit in NettworkCore" \
+    'CloudKit' \
+    "$sources"/{NetworkModel,WorkspaceChangeControl,Persistence,ContentSafety,ImportExport,FeatureContracts,WorkspaceServices}
+
+forbid_imports \
+    "Only Persistence and WorkspaceServices may import SwiftData in NettworkCore" \
+    'SwiftData' \
+    "$sources"/{NetworkModel,WorkspaceChangeControl,CloudSync,ContentSafety,ImportExport,FeatureContracts}
+
 forbid_imports \
     "NetworkModel must remain independent of change control and infrastructure" \
-    '^\s*import\s+(WorkspaceChangeControl|CloudKit|SwiftData|Persistence|CloudSync|ContentSafety|ImportExport)\b' \
-    Packages/NettworkCore/Sources/NetworkModel
+    'WorkspaceChangeControl|CloudKit|SwiftData|Persistence|CloudSync|ContentSafety|ImportExport' \
+    "$sources/NetworkModel"
 
 forbid_imports \
     "FeatureContracts must not import UI frameworks, SwiftData, CloudKit, Persistence, or CloudSync" \
-    '^\s*import\s+(SwiftUI|SwiftData|CloudKit|UIKit|AppKit|Persistence|CloudSync)\b' \
-    Packages/NettworkCore/Sources/FeatureContracts
+    'SwiftUI|SwiftUICore|SwiftData|CloudKit|UIKit|AppKit|Persistence|CloudSync' \
+    "$sources/FeatureContracts"
 
 forbid_imports \
     "WorkspaceServices must not import SwiftUI, UIKit, AppKit, or CloudKit" \
-    '^\s*import\s+(SwiftUI|UIKit|AppKit|CloudKit)\b' \
-    Packages/NettworkCore/Sources/WorkspaceServices
+    'SwiftUI|SwiftUICore|UIKit|AppKit|CloudKit' \
+    "$sources/WorkspaceServices"
 
 forbid_imports \
     "Presentation must not import CloudKit, SwiftData, Persistence, CloudSync, or WorkspaceServices" \
-    '^\s*import\s+(CloudKit|SwiftData|Persistence|CloudSync|WorkspaceServices)\b' \
+    'CloudKit|SwiftData|Persistence|CloudSync|WorkspaceServices' \
     NettworkApp/Presentation
 
 forbid_imports \
     "Platform adapters must not import SwiftData, CloudKit, Persistence, CloudSync, or WorkspaceServices" \
-    '^\s*import\s+(SwiftData|CloudKit|Persistence|CloudSync|WorkspaceServices)\b' \
+    'SwiftData|CloudKit|Persistence|CloudSync|WorkspaceServices' \
     NettworkApp/Platform
 
-check_platform_types_stay_out_of_presentation
+forbid_type_names Platform Presentation \
+    "Presentation must not reference Platform adapter types; inject them through Composition"
+forbid_type_names Composition Presentation \
+    "Presentation must not reference Composition types; Composition injects Presentation-owned state"
+forbid_type_names Presentation Platform \
+    "Platform adapters must not reference Presentation types"
+forbid_type_names Composition Platform \
+    "Platform adapters must not reference Composition types; Composition constructs the adapters"
 
 if ((failures)); then
     exit 1
 fi
 
-echo "architecture: package direction and import boundaries passed"
+echo "architecture: package direction, import boundaries, and app layer type names passed"

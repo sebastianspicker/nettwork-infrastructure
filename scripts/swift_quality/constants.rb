@@ -18,6 +18,6 @@ module SwiftQuality
     ".sh" => 200
   }.freeze
   GENERATED_DIRECTORIES = %w[
-    .build .git .repowise .serena .swiftpm build deriveddata generated node_modules vendor
+    .build .git .serena .swiftpm build deriveddata generated node_modules vendor
   ].freeze
 end

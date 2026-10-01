@@ -35,8 +35,8 @@ private extension AuthoritativeActivationMutationValidator {
             throw AuthoritativeActivationMutationValidationError.invalidActorSnapshot
         }
         guard !mutation.encodedAuditEvent.isEmpty, !mutation.encodedReceipt.isEmpty,
-            (try? StableActivationPayloadCoding.decode(AuditEvent.self, from: mutation.encodedAuditEvent)) == mutation.auditEvent,
-            (try? StableActivationPayloadCoding.decode(OperationReceipt.self, from: mutation.encodedReceipt)) == mutation.receipt
+            (try? CanonicalJSONCoding.decode(AuditEvent.self, from: mutation.encodedAuditEvent)) == mutation.auditEvent,
+            (try? CanonicalJSONCoding.decode(OperationReceipt.self, from: mutation.encodedReceipt)) == mutation.receipt
         else {
             throw AuthoritativeActivationMutationValidationError.invalidImmutablePayload
         }
@@ -333,7 +333,7 @@ private extension AuthoritativeActivationMutationValidator {
         _ save: AuthoritativeRecordSave,
         asset: CloudRecordAssetDescriptor, bytes: Data
     ) -> Bool {
-        guard let binding = try? StableActivationPayloadCoding.decode(AttachmentEvidenceBindingRecord.self, from: save.encodedRecord),
+        guard let binding = try? CanonicalJSONCoding.decode(AttachmentEvidenceBindingRecord.self, from: save.encodedRecord),
             (try? AttachmentEvidenceBindingRecord(
                 workOrderID: binding.workOrderID, attachmentID: binding.attachmentID,
                 reservationID: binding.reservationID, provenance: binding.provenance, evidence: binding.evidence,
@@ -348,7 +348,7 @@ private extension AuthoritativeActivationMutationValidator {
     }
 
     static func isValidFloorPlanAsset(_ save: AuthoritativeRecordSave, asset: CloudRecordAssetDescriptor) -> Bool {
-        guard let binding = try? StableActivationPayloadCoding.decode(FloorPlanAssetBindingRecord.self, from: save.encodedRecord),
+        guard let binding = try? CanonicalJSONCoding.decode(FloorPlanAssetBindingRecord.self, from: save.encodedRecord),
             (try? FloorPlanAssetBindingRecord(
                 floorID: binding.floorID, workOrderID: binding.workOrderID, assetMetadata: binding.assetMetadata,
                 intentDigest: binding.intentDigest, operationID: binding.operationID, auditEventID: binding.auditEventID,

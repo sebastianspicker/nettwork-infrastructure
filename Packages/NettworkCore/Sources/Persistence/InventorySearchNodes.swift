@@ -5,7 +5,7 @@ import WorkspaceChangeControl
 extension InventorySearchIndexBuilder {
     static func nodeRecord<T: Encodable>(_ key: ResourceKey, _ type: String, _ value: T, namespace: PersistenceNamespace) throws -> LocalMirrorRecord {
         LocalMirrorRecord(
-            namespace: namespace, resourceKey: key, recordType: type, schemaVersion: 1, payload: try MirroredAuthoritativeCoding.encode(value),
+            namespace: namespace, resourceKey: key, recordType: type, schemaVersion: 1, payload: try CanonicalJSONCoding.encode(value),
             systemFields: nil, changeTag: nil, isTombstone: false,
             serverModifiedAt: .distantPast, verifiedAt: .distantPast)
     }

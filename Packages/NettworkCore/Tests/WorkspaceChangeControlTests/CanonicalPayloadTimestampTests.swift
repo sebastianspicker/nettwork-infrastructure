@@ -82,7 +82,7 @@ final class CanonicalPayloadTimestampTests: XCTestCase {
     }
 
     private func roundTripped<Value: Codable>(_ value: Value) throws -> Value {
-        try StableMutationPayloadCoding.decode(Value.self, from: StableMutationPayloadCoding.encode(value))
+        try CanonicalJSONCoding.decode(Value.self, from: CanonicalJSONCoding.encode(value))
     }
 
     private func freshKeys() -> [ResourceKey] {

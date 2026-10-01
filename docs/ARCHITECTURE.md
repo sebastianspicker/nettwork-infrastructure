@@ -70,15 +70,26 @@ flowchart TD
 ```
 
 The exact package graph is declared in `Packages/NettworkCore/Package.swift`
-and enforced by `scripts/check-architecture.sh`. The same check keeps
-`NetworkModel` independent of change-control and infrastructure modules and
-forbids Presentation from importing CloudKit, SwiftData, `Persistence`,
-`CloudSync`, or `WorkspaceServices`; `FeatureContracts` additionally may not
-import SwiftUI, UIKit, or AppKit, and `WorkspaceServices` may not import
-SwiftUI, UIKit, AppKit, or CloudKit. `NettworkApp/Platform` may not import
-SwiftData, CloudKit, `Persistence`, `CloudSync`, or `WorkspaceServices`. Because Platform and
-Presentation share the app module, the script also fails if Presentation names
-a type declared in Platform.
+and enforced by `scripts/check-architecture.sh`. Its import rules match every
+import form, including attributed imports (`@preconcurrency`, `@_exported`,
+`@testable`) and declaration imports such as `import class SwiftData.ModelContext`.
+The same check enforces these rules:
+
+- No `NettworkCore` target imports SwiftUI, UIKit, or AppKit. Only `CloudSync`
+  imports CloudKit, and only `Persistence` and `WorkspaceServices` may import
+  SwiftData.
+- `NetworkModel` stays independent of change-control and infrastructure
+  modules, and `FeatureContracts` may not import `Persistence` or `CloudSync`.
+- Presentation may not import CloudKit, SwiftData, `Persistence`, `CloudSync`,
+  or `WorkspaceServices`. `NettworkApp/Platform` may not import SwiftData,
+  CloudKit, `Persistence`, `CloudSync`, or `WorkspaceServices`.
+- Presentation, Platform, and Composition share the app module, so the script
+  also checks type names. Presentation may not name a type declared in
+  Platform or Composition, and Platform may not name a type declared in
+  Presentation or Composition. Only Composition reaches into the other two
+  layers: it injects the Presentation-owned `WorkspaceShellState` and supplies
+  destinations through `AppDestinationProviding`. It also builds the system
+  Platform adapters in `Composition/Runtime`.
 
 | Component | Responsibility |
 | --- | --- |
@@ -90,9 +101,9 @@ a type declared in Platform.
 | `ImportExport` | Exact CSV schemas, archive formats, bounded parsing, verification, staged transfer, approval, export, and restore |
 | `FeatureContracts` | UI-facing service protocols and the snapshot, request, and error values that Presentation consumes and WorkspaceServices implements |
 | `WorkspaceServices` | Production feature services: session authorization, organization authorities, work-order mutation and planning, SwiftData read adapters and mirror projection, attachment and floor-plan evidence (including bounded PDF inspection and preview decoding), workspace transfer, sync state stores, OSLog sync telemetry, and audit export |
-| `NettworkApp/Presentation` | SwiftUI shell, navigation state and `nettwork://` route parsing (`Shell/Navigation.swift`), screens, feature models, view state, and document presentation |
+| `NettworkApp/Presentation` | SwiftUI shell and its workspace sync state (`Shell/WorkspaceShellState.swift`), navigation state and `nettwork://` route parsing (`Shell/Navigation.swift`), screens, feature models, view state, and document presentation |
 | `NettworkApp/Platform` | Apple-platform adapters behind FeatureContracts ports: camera capture, user-selected files and archive packages, PDF labels and printing, and pasteboard |
-| `NettworkApp/Composition` | App entry point, feature registry and optional feature capabilities, dependency injection, bootstrap, startup, and shutdown; `Composition/Runtime` assembles the production graph from organization input and CloudKit, one file per graph (foundation, cloud, attachment, transfer, organization authorities, floor plan, feature input) plus assembly validation |
+| `NettworkApp/Composition` | App entry point, feature registry and optional feature capabilities, dependency injection, bootstrap, startup, and shutdown; `Composition/Runtime` assembles the production graph from organization input and CloudKit, one file per graph (foundation, cloud, attachment, transfer, organization authorities, floor plan, feature input) plus assembly validation and the system Platform capability factories |
 
 ## How the app starts
 

@@ -1,5 +1,7 @@
 # Nettwork
 
+Network inventory, cabling, racks, and IP address management.
+
 <!-- markdownlint-disable MD013 -->
 
 Nettwork helps you document what is in a network, where it lives, and how it
@@ -12,7 +14,7 @@ configuration. This repository contains the source and a separate browser demo
 with sample data. A default native build opens without a connected workspace;
 it is not a ready-to-deploy installation.
 
-[Try the live demo](https://sebastianspicker.github.io/nettwork/) ·
+[Try the live demo](https://sebastianspicker.github.io/nettwork-infrastructure/) ·
 [Screenshot tour](#screenshot-tour) ·
 [Build the app](#build-the-native-app) ·
 [Configuration](docs/CONFIGURATION.md) ·
@@ -34,7 +36,7 @@ and synchronization behavior.
 
 ## Try the browser demo
 
-Open the [live demo](https://sebastianspicker.github.io/nettwork/) to explore
+Open the [live demo](https://sebastianspicker.github.io/nettwork-infrastructure/) to explore
 the sample workspace. It needs no Apple account or native build.
 
 To run the same demo locally, start a server from the repository root with
@@ -47,6 +49,10 @@ python3 -m http.server 4173 --bind 127.0.0.1 --directory site
 Open <http://127.0.0.1:4173/>. Browse the location tree, select an object, switch
 between workbench tabs, and inspect a connection path. Changes stay in browser
 memory and reset when you reload.
+
+Search by asset, location, cable, VLAN, or the sample address `10.42.120.17`.
+Use the arrow keys to move through matches, Enter to select one, and Escape to
+dismiss search. Unmatched searches show an explicit empty state.
 
 The demo is maintained separately from SwiftUI. Its inventory, connection
 status, event history, and work orders are bundled examples, with no live
@@ -157,3 +163,7 @@ workspace.
 ## License
 
 [MIT](LICENSE).
+
+## Repository naming
+
+The repository is now [`nettwork-infrastructure`](https://github.com/sebastianspicker/nettwork-infrastructure), previously `nettwork`. The product name and existing runtime, package, and data identifiers remain unchanged. The demo is at [the new Pages address](https://sebastianspicker.github.io/nettwork-infrastructure/).

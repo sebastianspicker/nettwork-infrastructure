@@ -242,7 +242,9 @@ public struct WorkspaceTransferCandidate: Sendable {
         do { value = try WorkspaceTransferCoding.decode(T.self, from: record.payload) } catch {
             throw WorkspaceTransferValidationError.malformedPayload(record.recordType)
         }
-        guard (try? WorkspaceTransferCoding.encode(value)) == record.payload else {
+        guard let reencoded = try? WorkspaceTransferCoding.encode(value),
+            CanonicalPayloadComparison.matches(stored: record.payload, reencoded: reencoded)
+        else {
             throw WorkspaceTransferValidationError.malformedPayload(record.recordType)
         }
         return value

@@ -188,38 +188,6 @@
     );
   }
 
-  function closeSearch() {
-    $("#search-results").hidden = true;
-  }
-  function renderSearch(query) {
-    const normalized = query.trim().toLowerCase();
-    const results = normalized
-      ? Object.values(data.objects).filter((item) =>
-          [item.name, item.kind, item.location, item.vlan, item.cable].join(" ").toLowerCase().includes(normalized),
-        )
-      : [];
-    const region = $("#search-results");
-    if (!results.length) {
-      region.hidden = true;
-      return;
-    }
-    region.innerHTML = results
-      .map(
-        (item) =>
-          `<button class="search-result" type="button" data-search-id="${item.id}">${icon(item.icon)}<span><strong>${item.name}</strong><small>${item.kind} · ${item.location}</small></span></button>`,
-      )
-      .join("");
-    region.hidden = false;
-    $$("[data-search-id]", region).forEach((button) =>
-      button.addEventListener("click", () => {
-        selectObject(button.dataset.searchId);
-        $("#global-search").value = "";
-        closeSearch();
-        $("#workspace").focus();
-      }),
-    );
-  }
-
   function bindNavigationEvents() {
     document.addEventListener("click", (event) => {
       const objectButton = event.target.closest("[data-object-id]");
@@ -247,17 +215,6 @@
               : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
         selectMode(tabs[next].id.slice(4), true);
       });
-    });
-  }
-
-  function bindSearchInputEvents() {
-    $("#global-search").addEventListener("input", (event) => renderSearch(event.target.value));
-    $("#global-search").addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.target.value = "";
-        closeSearch();
-        event.target.blur();
-      }
     });
   }
 
@@ -332,7 +289,7 @@
       if (event.key === "Escape") {
         document.body.classList.remove("search-open", "inspector-open", "sidebar-open");
         $("#sidebar-toggle").setAttribute("aria-expanded", "false");
-        closeSearch();
+        search.close();
         $("#global-search").blur();
       }
       if (event.key.toLowerCase() === "i" && !/input|textarea/i.test(document.activeElement.tagName))
@@ -342,7 +299,6 @@
 
   function bindEvents() {
     bindNavigationEvents();
-    bindSearchInputEvents();
     bindWorkspaceEvents();
     bindInspectorEvents();
     bindKeyboardEvents();
@@ -351,5 +307,6 @@
   renderNavigation();
   renderInspector();
   renderView();
+  const search = new window.NettworkSearch({ objects: data.objects, icon, selectObject, announce });
   bindEvents();
 }

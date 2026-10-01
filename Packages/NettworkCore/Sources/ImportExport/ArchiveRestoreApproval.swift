@@ -120,14 +120,6 @@ public struct ArchiveExportInput: Sendable {
     }
 }
 
-/// A document is handed to the platform archive writer one entry at a time.
-/// This core module never asks an archive library to extract or write a tree.
-public struct ArchiveExportDocument: Sendable {
-    public let manifest: ArchiveManifest
-    public let completionMarker: ArchiveCompletionMarker
-    public let entries: [String: Data]
-}
-
 public protocol ArchiveExportSource: Sendable {
     func currentAccount() async throws -> AccountContext
     func snapshot(for namespace: PersistenceNamespace) async throws -> ArchiveExportInput

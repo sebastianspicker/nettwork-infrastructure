@@ -170,7 +170,7 @@ extension InventorySearchIndexBuilder {
 
         static func decode<T: Decodable>(_ type: T.Type, record: LocalMirrorRecord) throws -> T {
             guard let payload = record.payload, payload.count <= 1_048_576 else { throw PersistenceStoreError.invalidMirrorRecord(record.resourceKey) }
-            do { return try MirroredAuthoritativeCoding.decode(type, from: payload) } catch {
+            do { return try CanonicalJSONCoding.decode(type, from: payload) } catch {
                 throw PersistenceStoreError.invalidMirrorRecord(record.resourceKey)
             }
         }

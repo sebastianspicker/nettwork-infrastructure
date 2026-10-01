@@ -120,7 +120,7 @@ extension AuthoritativeMutationValidator {
         workspaceZone: AuthoritativeWorkspaceZone
     ) throws {
         guard assertion.recordType == AuthoritativeActivationMutation.workspaceSentinelRecordType,
-            let workspace = try? StableActivationPayloadCoding.decode(
+            let workspace = try? CanonicalJSONCoding.decode(
                 WorkspaceSentinelPayload.self,
                 from: assertion.encodedRecord), workspace.matches(workspaceZone),
             case .active = workspace.lifecycle

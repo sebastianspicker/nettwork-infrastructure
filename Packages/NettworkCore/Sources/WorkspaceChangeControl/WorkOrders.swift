@@ -137,7 +137,7 @@ private enum CanonicalWorkIntentEncoder {
     private static func encodedOperation<T: Encodable>(_ label: String, _ value: T) throws -> Data {
         var data = Data()
         append(label, to: &data)
-        append(try encoded(value), to: &data)
+        append(try CanonicalJSONCoding.encode(value), to: &data)
         return data
     }
 
@@ -155,10 +155,10 @@ private enum CanonicalWorkIntentEncoder {
         append("template", to: &data)
         append(kind.rawValue, to: &data)
         append(source?.description, to: &data)
-        append(try encoded(target), to: &data)
+        append(try CanonicalJSONCoding.encode(target), to: &data)
         let ordered = migrations.sorted { $0.deviceID < $1.deviceID }
         append(ordered.count, to: &data)
-        for migration in ordered { append(try encoded(migration), to: &data) }
+        for migration in ordered { append(try CanonicalJSONCoding.encode(migration), to: &data) }
         return data
     }
 
@@ -167,7 +167,7 @@ private enum CanonicalWorkIntentEncoder {
         append("module-template", to: &data)
         append(kind.rawValue, to: &data)
         append(source?.description, to: &data)
-        append(try encoded(target), to: &data)
+        append(try CanonicalJSONCoding.encode(target), to: &data)
         return data
     }
 
@@ -175,7 +175,7 @@ private enum CanonicalWorkIntentEncoder {
         append("prefix-layout", to: &data)
         append(vrf.id.description, to: &data)
         append(revision, to: &data)
-        append(try encoded(vrf), to: &data)
+        append(try CanonicalJSONCoding.encode(vrf), to: &data)
         if schemaVersion >= 2 { try appendPrefixes(current, to: &data) }
         try appendPrefixes(desired, to: &data)
     }
@@ -183,7 +183,7 @@ private enum CanonicalWorkIntentEncoder {
     private static func appendPrefixes(_ prefixes: [Prefix], to data: inout Data) throws {
         let ordered = prefixes.sorted { $0.id == $1.id ? $0.cidr < $1.cidr : $0.id < $1.id }
         append(ordered.count, to: &data)
-        for prefix in ordered { append(try encoded(prefix), to: &data) }
+        for prefix in ordered { append(try CanonicalJSONCoding.encode(prefix), to: &data) }
     }
 
     private static func appendAddressAssignments(_ value: InterfaceAddressAssignmentSet, to data: inout Data) throws {
@@ -218,14 +218,7 @@ private enum CanonicalWorkIntentEncoder {
 
     private static func appendEncoded<T: Encodable>(_ values: [T], to data: inout Data) throws {
         append(values.count, to: &data)
-        for value in values { append(try encoded(value), to: &data) }
-    }
-
-    private static func encoded<T: Encodable>(_ value: T) throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return try encoder.encode(value)
+        for value in values { append(try CanonicalJSONCoding.encode(value), to: &data) }
     }
 
     private static func append(_ value: String?, to data: inout Data) {

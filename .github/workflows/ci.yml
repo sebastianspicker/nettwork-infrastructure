@@ -50,7 +50,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Install shell analyzers and XcodeGen
-        run: brew install shellcheck shfmt xcodegen
+        run: brew install shellcheck shfmt xcodegen ripgrep jq
 
       - name: Verify source
         run: make verify-source

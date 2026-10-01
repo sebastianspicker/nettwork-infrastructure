@@ -273,8 +273,6 @@ extension Array where Element == LocalMirrorRecord {
         recordType: String,
         expectedResourceKey: (T) -> ResourceKey
     ) throws -> [T] {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
         let acceptedTypes = Self.persistenceRecordTypes(for: recordType)
         var values: [T] = []
         for record in self {
@@ -284,7 +282,7 @@ extension Array where Element == LocalMirrorRecord {
             }
             let value: T
             do {
-                value = try decoder.decode(T.self, from: payload)
+                value = try CanonicalJSONCoding.decode(T.self, from: payload)
             } catch {
                 throw ProductionAdapterError.malformedAuthoritativeMirrorRecord(record.resourceKey, record.recordType)
             }

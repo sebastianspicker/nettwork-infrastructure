@@ -23,9 +23,9 @@ extension AuthoritativeMutationValidator {
         guard !mutation.encodedWorkOrder.isEmpty,
             !mutation.encodedAuditEvent.isEmpty,
             !mutation.encodedReceipt.isEmpty,
-            (try? StableMutationPayloadCoding.decode(WorkOrder.self, from: mutation.encodedWorkOrder)) == mutation.workOrder,
-            (try? StableMutationPayloadCoding.decode(AuditEvent.self, from: mutation.encodedAuditEvent)) == mutation.auditEvent,
-            (try? StableMutationPayloadCoding.decode(OperationReceipt.self, from: mutation.encodedReceipt)) == mutation.receipt
+            (try? CanonicalJSONCoding.decode(WorkOrder.self, from: mutation.encodedWorkOrder)) == mutation.workOrder,
+            (try? CanonicalJSONCoding.decode(AuditEvent.self, from: mutation.encodedAuditEvent)) == mutation.auditEvent,
+            (try? CanonicalJSONCoding.decode(OperationReceipt.self, from: mutation.encodedReceipt)) == mutation.receipt
         else {
             throw AuthoritativeMutationValidationError.invalidImmutablePayload
         }

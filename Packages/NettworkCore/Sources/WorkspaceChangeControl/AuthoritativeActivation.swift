@@ -77,8 +77,8 @@ public struct AuthoritativeActivationMutation: Codable, Hashable, Sendable {
             ?? OperationReceipt(
                 workspaceZone: workspaceZone, operationID: operationID,
                 intentDigest: intentDigest, auditEventID: auditEvent.id)
-        self.encodedAuditEvent = try encodedAuditEvent ?? StableActivationPayloadCoding.encode(auditEvent)
-        self.encodedReceipt = try encodedReceipt ?? StableActivationPayloadCoding.encode(self.receipt)
+        self.encodedAuditEvent = try encodedAuditEvent ?? CanonicalJSONCoding.encode(auditEvent)
+        self.encodedReceipt = try encodedReceipt ?? CanonicalJSONCoding.encode(self.receipt)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -119,21 +119,6 @@ public struct AuthoritativeActivationMutation: Codable, Hashable, Sendable {
         try container.encode(receipt, forKey: .receipt)
         try container.encode(encodedAuditEvent, forKey: .encodedAuditEvent)
         try container.encode(encodedReceipt, forKey: .encodedReceipt)
-    }
-}
-
-enum StableActivationPayloadCoding {
-    static func encode<T: Encodable>(_ value: T) throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return try encoder.encode(value)
-    }
-
-    static func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(type, from: data)
     }
 }
 

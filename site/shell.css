@@ -122,7 +122,7 @@ h1 {
   cursor: pointer;
 }
 .search-result:hover,
-.search-result[aria-selected="true"] {
+.search-result:focus-visible {
   background: var(--selected);
 }
 .search-result svg {
@@ -139,6 +139,12 @@ h1 {
   color: var(--secondary);
   font-size: 11px;
   margin-top: 2px;
+}
+.search-empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--secondary);
+  font-size: 13px;
 }
 .top-actions,
 .view-actions {

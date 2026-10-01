@@ -70,7 +70,7 @@ Run commands from the repository root unless stated otherwise.
 | `make verify-package` | Complete `NettworkCore` Swift package tests with compiler warnings treated as errors |
 | `make verify-native` | Generates the Xcode project, tests the macOS app bundle, and builds the iOS Simulator app without signing |
 | `make benchmark` | Release measurements with fixed fixtures; no wall-clock pass/fail thresholds |
-| `make check-architecture` | Exact package dependencies, forbidden imports per layer, and no Platform type names in Presentation; requires `rg`, `swift`, and `ruby` |
+| `make check-architecture` | Exact package dependencies, forbidden imports per target and layer (including attributed and scoped imports), and type-name boundaries between the app layers; requires `rg`, `swift`, and `ruby` |
 | `make check-quality` | Authored-source physical limits plus Swift callable length, complexity, and exact-clone checks |
 | `make check-assets` | Asset JSON, references, dimensions, opacity, required colors, and target settings |
 | `make lint-docs` | Locked Markdown linting for root and package documentation |
@@ -179,7 +179,7 @@ variability, memory limits, and the corresponding local verification results.
 ## Static demo
 
 The demo is maintained directly in `site/`; it is not generated from SwiftUI.
-The public demo is at <https://sebastianspicker.github.io/nettwork/>.
+The public demo is at <https://sebastianspicker.github.io/nettwork-infrastructure/>.
 Validate and preview it locally with:
 
 ```sh
@@ -215,7 +215,7 @@ is not a native app capture.
 - Replace `Design/Brand/NettworkIconMaster.png` only through the process in the
   [brand guide](../Design/Brand/README.md), then regenerate and validate icons.
 - Treat `.build/`, `.swiftpm/`, `Nettwork.xcodeproj`, DerivedData, build output,
-  test results, coverage, `.serena/`, and `.repowise/` as generated or local
+  test results, coverage, and `.serena/` as generated or local
   state rather than maintained source.
 
 ## CI coverage

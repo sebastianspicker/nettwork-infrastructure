@@ -2,7 +2,9 @@
 ///
 /// These strings are a persisted wire contract: they appear in CloudKit record
 /// types, the local mirror, archives, and staged transfers. Changing a value
-/// orphans existing data, so each name is spelled exactly once, here.
+/// orphans existing data, so each name is spelled once, here. The exception is
+/// `WorkspaceTransferRecordType`, whose raw values Swift requires as literals;
+/// `WorkspaceTransferRecordTypeNamingTests` pins them to these constants.
 public enum WorkspaceRecordType {
     public static let attachmentEvidenceBinding = "NettworkAttachmentEvidenceBinding"
     public static let attachmentEvidenceQuotaLedger = "NettworkAttachmentEvidenceQuotaLedger"
@@ -32,6 +34,10 @@ public enum WorkspaceRecordType {
     public static let rack = "NettworkRack"
     public static let rackPlacement = "NettworkRackPlacement"
     public static let resourceReservationLock = "NettworkResourceReservationLock"
+    /// The unprefixed source type that reservation lock saves and tombstones
+    /// carry in authoritative mutations. `CloudRecordNaming.canonicalRecordType`
+    /// maps it to `resourceReservationLock` at the CloudKit boundary.
+    public static let resourceReservationLockSource = "ResourceReservationLock"
     public static let templatePlacementState = "NettworkTemplatePlacementState"
     public static let tombstone = "NettworkTombstone"
     public static let topologyTombstone = "NettworkTopologyTombstone"
@@ -67,7 +73,6 @@ public enum WorkspaceRecordType {
         public static let prefix = "Prefix"
         public static let rack = "Rack"
         public static let rackPlacement = "RackPlacement"
-        public static let resourceReservationLock = "ResourceReservationLock"
         public static let templatePlacementState = "TemplatePlacementState"
         public static let topologyTombstone = "TopologyTombstone"
         public static let vlan = "VLAN"
