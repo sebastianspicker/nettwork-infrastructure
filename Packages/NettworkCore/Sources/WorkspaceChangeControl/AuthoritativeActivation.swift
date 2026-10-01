@@ -5,12 +5,12 @@ import NetworkModel
 /// activations. Every changed record, the accepted audit event, and the
 /// receipt are committed through one conditional authoritative boundary.
 public struct AuthoritativeActivationMutation: Codable, Hashable, Sendable {
-    public static let workspaceSentinelRecordType = "NettworkWorkspace"
-    public static let transferSessionRecordType = "NettworkWorkspaceTransferSession"
-    public static let floorPlanAssetBindingRecordType = "NettworkFloorPlanAssetBinding"
+    public static let workspaceSentinelRecordType = WorkspaceRecordType.workspace
+    public static let transferSessionRecordType = WorkspaceRecordType.workspaceTransferSession
+    public static let floorPlanAssetBindingRecordType = WorkspaceRecordType.floorPlanAssetBinding
     public static let attachmentEvidenceActivationRecordTypes: Set<String> = [
-        "NettworkAttachmentEvidenceQuotaLedger", "NettworkAttachmentEvidenceReservationRelease",
-        "NettworkAttachmentEvidenceBinding",
+        WorkspaceRecordType.attachmentEvidenceQuotaLedger, WorkspaceRecordType.attachmentEvidenceReservationRelease,
+        WorkspaceRecordType.attachmentEvidenceBinding,
     ]
     public static let noSessionActivationRecordTypes: Set<String> =
         attachmentEvidenceActivationRecordTypes.union([floorPlanAssetBindingRecordType])

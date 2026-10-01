@@ -14,41 +14,56 @@ extension InventorySearchIndexBuilder {
         let portStateFacts: [ObjectID: PortStateFact]
 
         init(records: [LocalMirrorRecord]) throws {
-            let placementState = try Self.single(records, as: TemplatePlacementState.self, types: ["NettworkTemplatePlacementState", "TemplatePlacementState"])
+            let placementState = try Self.single(
+                records, as: TemplatePlacementState.self,
+                types: [WorkspaceRecordType.templatePlacementState, WorkspaceRecordType.Legacy.templatePlacementState])
             let topologyAggregate = try Self.latestTopology(records)
-            let hierarchyAggregate = try Self.single(records, as: WorkspaceHierarchy.self, types: ["NettworkWorkspaceHierarchy", "WorkspaceHierarchy"])
+            let hierarchyAggregate = try Self.single(
+                records, as: WorkspaceHierarchy.self, types: [WorkspaceRecordType.workspaceHierarchy, WorkspaceRecordType.Legacy.workspaceHierarchy])
             let topologySeed = placementState?.topology ?? topologyAggregate ?? PhysicalTopology()
             let hierarchySeed = placementState?.hierarchy ?? hierarchyAggregate ?? WorkspaceHierarchy()
             topology = PhysicalTopology(
-                deviceTypes: try Self.overlay(topologySeed.deviceTypes, records: records, as: DeviceType.self, types: ["NettworkDeviceType", "DeviceType"]),
-                devices: try Self.overlay(topologySeed.devices, records: records, as: Device.self, types: ["NettworkDevice", "Device"]),
-                modules: try Self.overlay(topologySeed.modules, records: records, as: Module.self, types: ["NettworkModule", "Module"]),
-                ports: try Self.overlay(topologySeed.ports, records: records, as: NetworkModel.Port.self, types: ["NettworkPort", "Port"]),
-                cables: try Self.overlay(topologySeed.cables, records: records, as: Cable.self, types: ["NettworkCable", "Cable"]),
+                deviceTypes: try Self.overlay(
+                    topologySeed.deviceTypes, records: records, as: DeviceType.self,
+                    types: [WorkspaceRecordType.deviceType, WorkspaceRecordType.Legacy.deviceType]),
+                devices: try Self.overlay(
+                    topologySeed.devices, records: records, as: Device.self, types: [WorkspaceRecordType.device, WorkspaceRecordType.Legacy.device]),
+                modules: try Self.overlay(
+                    topologySeed.modules, records: records, as: Module.self, types: [WorkspaceRecordType.module, WorkspaceRecordType.Legacy.module]),
+                ports: try Self.overlay(
+                    topologySeed.ports, records: records, as: NetworkModel.Port.self, types: [WorkspaceRecordType.port, WorkspaceRecordType.Legacy.port]),
+                cables: try Self.overlay(
+                    topologySeed.cables, records: records, as: Cable.self, types: [WorkspaceRecordType.cable, WorkspaceRecordType.Legacy.cable]),
                 internalLinks: try Self.overlay(
-                    topologySeed.internalLinks, records: records, as: InternalLink.self, types: ["NettworkInternalLink", "InternalLink"]),
+                    topologySeed.internalLinks, records: records, as: InternalLink.self,
+                    types: [WorkspaceRecordType.internalLink, WorkspaceRecordType.Legacy.internalLink]),
                 reservations: topologySeed.reservations, plannedWork: topologySeed.plannedWork,
                 tombstones: try Self.overlay(
-                    topologySeed.tombstones, records: records, as: TopologyTombstone.self, types: ["NettworkTopologyTombstone", "TopologyTombstone"]),
+                    topologySeed.tombstones, records: records, as: TopologyTombstone.self,
+                    types: [WorkspaceRecordType.topologyTombstone, WorkspaceRecordType.Legacy.topologyTombstone]),
                 revision: topologySeed.revision, appliedOperationIDs: topologySeed.appliedOperationIDs)
             hierarchy = WorkspaceHierarchy(
-                locations: try Self.overlay(hierarchySeed.locations, records: records, as: Location.self, types: ["NettworkLocation", "Location"]),
-                racks: try Self.overlay(hierarchySeed.racks, records: records, as: Rack.self, types: ["NettworkRack", "Rack"]),
+                locations: try Self.overlay(
+                    hierarchySeed.locations, records: records, as: Location.self, types: [WorkspaceRecordType.location, WorkspaceRecordType.Legacy.location]),
+                racks: try Self.overlay(
+                    hierarchySeed.racks, records: records, as: Rack.self, types: [WorkspaceRecordType.rack, WorkspaceRecordType.Legacy.rack]),
                 tombstones: try Self.overlay(
-                    hierarchySeed.tombstones, records: records, as: HierarchyTombstone.self, types: ["NettworkHierarchyTombstone", "HierarchyTombstone"])
+                    hierarchySeed.tombstones, records: records, as: HierarchyTombstone.self,
+                    types: [WorkspaceRecordType.hierarchyTombstone, WorkspaceRecordType.Legacy.hierarchyTombstone])
             )
             placements = try Self.overlayPlacements(
                 placementState?.placements ?? [],
                 records: records,
-                types: ["NettworkRackPlacement", "RackPlacement"]
+                types: [WorkspaceRecordType.rackPlacement, WorkspaceRecordType.Legacy.rackPlacement]
             )
-            addresses = try Self.direct(records, as: IPAddressRecord.self, types: ["NettworkIPAddressRecord"], key: { .string($0.id) })
-            interfaces = try Self.direct(records, as: Interface.self, types: ["NettworkInterface"], key: { .object($0.id) })
-            workOrders = try Self.direct(records, as: WorkOrder.self, types: ["NettworkWorkOrder", LocalRecordKind.workOrder], key: { .object($0.id) })
+            addresses = try Self.direct(records, as: IPAddressRecord.self, types: [WorkspaceRecordType.ipAddressRecord], key: { .string($0.id) })
+            interfaces = try Self.direct(records, as: Interface.self, types: [WorkspaceRecordType.interface], key: { .object($0.id) })
+            workOrders = try Self.direct(
+                records, as: WorkOrder.self, types: [WorkspaceRecordType.workOrder, LocalRecordKind.workOrder], key: { .object($0.id) })
             let facts = try Self.direct(
                 records,
                 as: PortStateFact.self,
-                types: ["NettworkInventoryPortStateFact"],
+                types: [WorkspaceRecordType.inventoryPortStateFact],
                 key: { .string(InventorySearchIndexBuilder.portStateFactKey($0.portID)) }
             )
             portStateFacts = Dictionary(facts.map { ($0.portID, $0) }, uniquingKeysWith: { current, _ in current })
@@ -63,7 +78,9 @@ extension InventorySearchIndexBuilder {
         }
 
         private static func latestTopology(_ records: [LocalMirrorRecord]) throws -> PhysicalTopology? {
-            let matches = records.filter { !$0.isTombstone && ["NettworkPhysicalTopology", LocalRecordKind.physicalTopology].contains($0.recordType) }
+            let matches = records.filter {
+                !$0.isTombstone && [WorkspaceRecordType.physicalTopology, LocalRecordKind.physicalTopology].contains($0.recordType)
+            }
             let values = try matches.map { try decode(PhysicalTopology.self, record: $0) }
             return values.max { $0.revision < $1.revision }
         }

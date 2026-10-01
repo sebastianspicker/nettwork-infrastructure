@@ -11,18 +11,21 @@ struct MaterializationInputs {
 }
 
 let plannerRecordTypes: Set<String> = [
-    "NettworkPhysicalTopology", LocalRecordKind.physicalTopology,
-    "NettworkDeviceType", "DeviceType", "NettworkModuleTemplate", "ModuleTemplate", "NettworkDevice", "Device",
-    "NettworkModule", "Module", "NettworkPort", "Port",
-    "NettworkCable", "Cable", "NettworkInternalLink", "InternalLink",
-    "NettworkVRF", "VRF", "NettworkPrefix", LocalRecordKind.prefix, "Prefix",
-    "NettworkIPAddressRecord", "IPAddressRecord", "NettworkVLAN", "VLAN",
-    "NettworkInterface", "Interface", "NettworkIPAddressAssignment", "IPAddressAssignment",
-    "NettworkInterfaceVLANMembership", "InterfaceVLANMembership",
-    "NettworkWorkspaceHierarchy", "WorkspaceHierarchy", "NettworkLocation", "Location",
-    "NettworkRack", "Rack", "NettworkHierarchyTombstone", "HierarchyTombstone",
-    "NettworkRackPlacement", "RackPlacement",
-    "NettworkFloorPlanAnchor", "FloorPlanAnchor", "NettworkTemplatePlacementState", "TemplatePlacementState",
+    WorkspaceRecordType.physicalTopology, LocalRecordKind.physicalTopology,
+    WorkspaceRecordType.deviceType, WorkspaceRecordType.Legacy.deviceType, WorkspaceRecordType.moduleTemplate, WorkspaceRecordType.Legacy.moduleTemplate,
+    WorkspaceRecordType.device, WorkspaceRecordType.Legacy.device,
+    WorkspaceRecordType.module, WorkspaceRecordType.Legacy.module, WorkspaceRecordType.port, WorkspaceRecordType.Legacy.port,
+    WorkspaceRecordType.cable, WorkspaceRecordType.Legacy.cable, WorkspaceRecordType.internalLink, WorkspaceRecordType.Legacy.internalLink,
+    WorkspaceRecordType.vrf, WorkspaceRecordType.Legacy.vrf, WorkspaceRecordType.prefix, LocalRecordKind.prefix, WorkspaceRecordType.Legacy.prefix,
+    WorkspaceRecordType.ipAddressRecord, WorkspaceRecordType.Legacy.ipAddressRecord, WorkspaceRecordType.vlan, WorkspaceRecordType.Legacy.vlan,
+    WorkspaceRecordType.interface, WorkspaceRecordType.Legacy.interface, WorkspaceRecordType.ipAddressAssignment,
+    WorkspaceRecordType.Legacy.ipAddressAssignment,
+    WorkspaceRecordType.interfaceVLANMembership, WorkspaceRecordType.Legacy.interfaceVLANMembership,
+    WorkspaceRecordType.workspaceHierarchy, WorkspaceRecordType.Legacy.workspaceHierarchy, WorkspaceRecordType.location, WorkspaceRecordType.Legacy.location,
+    WorkspaceRecordType.rack, WorkspaceRecordType.Legacy.rack, WorkspaceRecordType.hierarchyTombstone, WorkspaceRecordType.Legacy.hierarchyTombstone,
+    WorkspaceRecordType.rackPlacement, WorkspaceRecordType.Legacy.rackPlacement,
+    WorkspaceRecordType.floorPlanAnchor, WorkspaceRecordType.Legacy.floorPlanAnchor, WorkspaceRecordType.templatePlacementState,
+    WorkspaceRecordType.Legacy.templatePlacementState,
 ]
 
 func materializationInputs(from records: [LocalMirrorRecord]) throws -> MaterializationInputs {
@@ -127,17 +130,19 @@ struct Snapshot {
         deviceTypes = Dictionary(topology.deviceTypes.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
         moduleTemplates = Dictionary(normalized.moduleTemplates.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
         self.devices = Dictionary(topology.devices.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
-        let vrfs: [VRF] = try values(VRF.self, names: ["NettworkVRF", "VRF"])
-        let prefixes: [Prefix] = try values(Prefix.self, names: ["NettworkPrefix", LocalRecordKind.prefix, "Prefix"])
-        let addresses: [IPAddressRecord] = try values(IPAddressRecord.self, names: ["NettworkIPAddressRecord", "IPAddressRecord"])
-        let vlans: [VLAN] = try values(VLAN.self, names: ["NettworkVLAN", "VLAN"])
-        let interfaces: [Interface] = try values(Interface.self, names: ["NettworkInterface", "Interface"])
-        let assignments: [IPAddressAssignment] = try values(IPAddressAssignment.self, names: ["NettworkIPAddressAssignment", "IPAddressAssignment"])
+        let vrfs: [VRF] = try values(VRF.self, names: [WorkspaceRecordType.vrf, WorkspaceRecordType.Legacy.vrf])
+        let prefixes: [Prefix] = try values(Prefix.self, names: [WorkspaceRecordType.prefix, LocalRecordKind.prefix, WorkspaceRecordType.Legacy.prefix])
+        let addresses: [IPAddressRecord] = try values(
+            IPAddressRecord.self, names: [WorkspaceRecordType.ipAddressRecord, WorkspaceRecordType.Legacy.ipAddressRecord])
+        let vlans: [VLAN] = try values(VLAN.self, names: [WorkspaceRecordType.vlan, WorkspaceRecordType.Legacy.vlan])
+        let interfaces: [Interface] = try values(Interface.self, names: [WorkspaceRecordType.interface, WorkspaceRecordType.Legacy.interface])
+        let assignments: [IPAddressAssignment] = try values(
+            IPAddressAssignment.self, names: [WorkspaceRecordType.ipAddressAssignment, WorkspaceRecordType.Legacy.ipAddressAssignment])
         let memberships: [InterfaceVLANMembership] = try values(
             InterfaceVLANMembership.self,
             names: [
-                "NettworkInterfaceVLANMembership",
-                "InterfaceVLANMembership",
+                WorkspaceRecordType.interfaceVLANMembership,
+                WorkspaceRecordType.Legacy.interfaceVLANMembership,
             ])
         self.vrfs = Dictionary(vrfs.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
         self.prefixes = Dictionary(prefixes.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
@@ -192,12 +197,12 @@ struct ChangeAccumulator {
     }
 
     mutating func captureTopologyDifference(before: PhysicalTopology, after: PhysicalTopology) throws {
-        try capture(before.deviceTypes, after.deviceTypes, recordType: "DeviceType")
-        try capture(before.devices, after.devices, recordType: "Device")
-        try capture(before.modules, after.modules, recordType: "Module")
-        try capture(before.ports, after.ports, recordType: "Port")
-        try capture(before.cables, after.cables, recordType: "Cable")
-        try capture(before.internalLinks, after.internalLinks, recordType: "InternalLink")
+        try capture(before.deviceTypes, after.deviceTypes, recordType: WorkspaceRecordType.Legacy.deviceType)
+        try capture(before.devices, after.devices, recordType: WorkspaceRecordType.Legacy.device)
+        try capture(before.modules, after.modules, recordType: WorkspaceRecordType.Legacy.module)
+        try capture(before.ports, after.ports, recordType: WorkspaceRecordType.Legacy.port)
+        try capture(before.cables, after.cables, recordType: WorkspaceRecordType.Legacy.cable)
+        try capture(before.internalLinks, after.internalLinks, recordType: WorkspaceRecordType.Legacy.internalLink)
     }
 
     mutating func material() throws -> ProductionMutationMaterial {

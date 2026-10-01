@@ -31,7 +31,7 @@ extension SwiftDataPersistenceStore {
     }
 
     func projectAttachmentEvidence(_ record: LocalMirrorRecord, in namespace: PersistenceNamespace) throws {
-        guard !record.isTombstone, record.recordType == "NettworkAttachmentEvidenceBinding" else { return }
+        guard !record.isTombstone, record.recordType == WorkspaceRecordType.attachmentEvidenceBinding else { return }
         let binding = try attachmentEvidenceBinding(record)
         let receipt = try attachmentEvidenceReceipt(for: binding, in: namespace)
         try validateAttachment(for: binding, in: namespace)
@@ -49,7 +49,7 @@ extension SwiftDataPersistenceStore {
 
     func attachmentEvidenceReceipt(for binding: AttachmentEvidenceBindingRecord, in namespace: PersistenceNamespace) throws -> OperationReceipt {
         let key = ResourceKey.operationReceipt(operationID: binding.operationID)
-        guard let record = try storedLocalMirror(for: key, in: namespace), !record.isTombstone, record.recordType == "NettworkOperationReceipt",
+        guard let record = try storedLocalMirror(for: key, in: namespace), !record.isTombstone, record.recordType == WorkspaceRecordType.operationReceipt,
             let payload = record.payload
         else { throw PersistenceStoreError.invalidReceipt(binding.operationID) }
         let receipt = try MirroredAuthoritativeCoding.decode(OperationReceipt.self, from: payload)

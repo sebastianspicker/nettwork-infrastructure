@@ -354,7 +354,7 @@ extension SwiftDataPersistenceStore {
     private func evidenceRepairCandidate(for owner: LocalMirrorAssetOwnerModel, in namespace: PersistenceNamespace) throws -> ResourceKey? {
         let key = try PersistenceCoding.decode(ResourceKey.self, from: owner.ownerKeyData)
         guard let record = try storedLocalMirror(for: key, in: namespace) else { return nil }
-        guard !record.isTombstone, record.recordType == "NettworkAttachmentEvidenceBinding" else { return nil }
+        guard !record.isTombstone, record.recordType == WorkspaceRecordType.attachmentEvidenceBinding else { return nil }
         guard let assetID = UUID(uuidString: owner.assetID).map(ObjectID.init) else { return nil }
         let storageKey = attachmentEvidenceStorageKey(attachmentID: assetID, namespace: namespace)
         return try attachmentEvidenceModel(matching: storageKey) == nil ? key : nil

@@ -321,7 +321,7 @@ private extension AuthoritativeActivationMutationValidator {
     static func isValidRecordBoundAsset(_ save: AuthoritativeRecordSave) -> Bool {
         guard let asset = save.recordAsset, let bytes = try? asset.validatedBytes() else { return false }
         switch save.recordType {
-        case "NettworkAttachmentEvidenceBinding":
+        case WorkspaceRecordType.attachmentEvidenceBinding:
             return isValidAttachmentEvidenceAsset(save, asset: asset, bytes: bytes)
         case AuthoritativeActivationMutation.floorPlanAssetBindingRecordType:
             return isValidFloorPlanAsset(save, asset: asset)

@@ -59,7 +59,7 @@ extension CompositeCloudRemoteReferenceValidator {
     }
 
     private func validateFloorBinding(_ binding: FloorPlanAssetBindingRecord, postState: [ResourceKey: CloudRecordEnvelope]) throws {
-        let floor: Location = try floorDependency(Location.self, key: .object(binding.floorID), type: "NettworkLocation", postState: postState)
+        let floor: Location = try floorDependency(Location.self, key: .object(binding.floorID), type: WorkspaceRecordType.location, postState: postState)
         let workOrder: WorkOrder = try floorDependency(
             WorkOrder.self, key: .object(binding.workOrderID), type: CloudRecordNaming.workOrderRecordType, postState: postState)
         let audit: AuditEvent = try floorDependency(

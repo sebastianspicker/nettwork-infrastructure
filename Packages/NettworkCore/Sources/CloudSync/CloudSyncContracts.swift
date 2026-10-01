@@ -7,27 +7,31 @@ import WorkspaceChangeControl
 /// Names contain no user-controlled labels and remain stable across retries.
 public enum CloudRecordNaming {
     public static let schemaVersion = 1
-    public static let workspaceRecordType = "NettworkWorkspace"
-    public static let shareRecordType = "NettworkWorkspaceShare"
-    public static let workOrderRecordType = "NettworkWorkOrder"
-    public static let reservationLockRecordType = "NettworkResourceReservationLock"
-    public static let auditRecordType = "NettworkAuditEvent"
-    public static let receiptRecordType = "NettworkOperationReceipt"
-    public static let tombstoneRecordType = "NettworkTombstone"
-    public static let attachmentEvidenceQuotaLedgerRecordType = "NettworkAttachmentEvidenceQuotaLedger"
-    public static let attachmentEvidenceReservationReleaseRecordType = "NettworkAttachmentEvidenceReservationRelease"
-    public static let attachmentEvidenceBindingRecordType = "NettworkAttachmentEvidenceBinding"
+    public static let workspaceRecordType = WorkspaceRecordType.workspace
+    public static let shareRecordType = WorkspaceRecordType.workspaceShare
+    public static let workOrderRecordType = WorkspaceRecordType.workOrder
+    public static let reservationLockRecordType = WorkspaceRecordType.resourceReservationLock
+    public static let auditRecordType = WorkspaceRecordType.auditEvent
+    public static let receiptRecordType = WorkspaceRecordType.operationReceipt
+    public static let tombstoneRecordType = WorkspaceRecordType.tombstone
+    public static let attachmentEvidenceQuotaLedgerRecordType = WorkspaceRecordType.attachmentEvidenceQuotaLedger
+    public static let attachmentEvidenceReservationReleaseRecordType = WorkspaceRecordType.attachmentEvidenceReservationRelease
+    public static let attachmentEvidenceBindingRecordType = WorkspaceRecordType.attachmentEvidenceBinding
     public static let floorPlanAssetBindingRecordType = AuthoritativeActivationMutation.floorPlanAssetBindingRecordType
-    public static let workspaceAssetRecordType = "NettworkWorkspaceAsset"
-    public static let importedHistoricalReferenceRecordType = "NettworkImportedHistoricalReference"
+    public static let workspaceAssetRecordType = WorkspaceRecordType.workspaceAsset
+    public static let importedHistoricalReferenceRecordType = WorkspaceRecordType.importedHistoricalReference
     public static let workspaceTransferSessionRecordType = CloudStagedTransferRecordType.session
     public static let maximumRecordNameUTF8Length = 240
     public static let domainRecordTypes: Set<String> = [
-        "NettworkLocation", "NettworkRack", "NettworkDeviceType", "NettworkPortTemplate", "NettworkModuleTemplate",
-        "NettworkDevice", "NettworkModule", "NettworkRackPlacement", "NettworkFloorPlanAnchor", "NettworkPort",
-        "NettworkCable", "NettworkInternalLink", "NettworkPrefix", "NettworkVRF", "NettworkIPAddressRecord",
-        "NettworkVLANGroup", "NettworkVLAN", "NettworkInterface", "NettworkIPAddressAssignment", "NettworkInterfaceVLANMembership",
-        "NettworkPhysicalTopology", "NettworkWorkspaceHierarchy", "NettworkTemplatePlacementState", "NettworkTopologyTombstone", "NettworkHierarchyTombstone",
+        WorkspaceRecordType.location, WorkspaceRecordType.rack, WorkspaceRecordType.deviceType, WorkspaceRecordType.portTemplate,
+        WorkspaceRecordType.moduleTemplate,
+        WorkspaceRecordType.device, WorkspaceRecordType.module, WorkspaceRecordType.rackPlacement, WorkspaceRecordType.floorPlanAnchor,
+        WorkspaceRecordType.port,
+        WorkspaceRecordType.cable, WorkspaceRecordType.internalLink, WorkspaceRecordType.prefix, WorkspaceRecordType.vrf, WorkspaceRecordType.ipAddressRecord,
+        WorkspaceRecordType.vlanGroup, WorkspaceRecordType.vlan, WorkspaceRecordType.interface, WorkspaceRecordType.ipAddressAssignment,
+        WorkspaceRecordType.interfaceVLANMembership,
+        WorkspaceRecordType.physicalTopology, WorkspaceRecordType.workspaceHierarchy, WorkspaceRecordType.templatePlacementState,
+        WorkspaceRecordType.topologyTombstone, WorkspaceRecordType.hierarchyTombstone,
         workspaceRecordType, shareRecordType, workOrderRecordType, reservationLockRecordType, auditRecordType, receiptRecordType, tombstoneRecordType,
         attachmentEvidenceQuotaLedgerRecordType, attachmentEvidenceReservationReleaseRecordType, attachmentEvidenceBindingRecordType,
         floorPlanAssetBindingRecordType, workspaceAssetRecordType, importedHistoricalReferenceRecordType,

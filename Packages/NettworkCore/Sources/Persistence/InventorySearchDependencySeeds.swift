@@ -8,11 +8,11 @@ extension InventorySearchIndexBuilder {
         context: inout Set<ResourceKey>
     ) throws {
         switch record.recordType {
-        case "NettworkCable", "Cable": try addCableSeed(record, dirty: &dirty)
-        case "NettworkPort", "Port": try addPortSeed(record, context: &context)
-        case "NettworkDevice", "Device": try addDeviceSeed(record, context: &context)
-        case "NettworkModule", "Module": try addModuleSeed(record, context: &context)
-        case "NettworkInternalLink", "InternalLink": try addLinkSeed(record, context: &context)
+        case WorkspaceRecordType.cable, WorkspaceRecordType.Legacy.cable: try addCableSeed(record, dirty: &dirty)
+        case WorkspaceRecordType.port, WorkspaceRecordType.Legacy.port: try addPortSeed(record, context: &context)
+        case WorkspaceRecordType.device, WorkspaceRecordType.Legacy.device: try addDeviceSeed(record, context: &context)
+        case WorkspaceRecordType.module, WorkspaceRecordType.Legacy.module: try addModuleSeed(record, context: &context)
+        case WorkspaceRecordType.internalLink, WorkspaceRecordType.Legacy.internalLink: try addLinkSeed(record, context: &context)
         default: try addRemainingDirectDependencySeed(record, dirty: &dirty, context: &context)
         }
     }
@@ -22,12 +22,12 @@ extension InventorySearchIndexBuilder {
         context: inout Set<ResourceKey>
     ) throws {
         switch record.recordType {
-        case "NettworkRack", "Rack": try addRackSeed(record, context: &context)
-        case "NettworkLocation", "Location": try addLocationSeed(record, context: &context)
-        case "NettworkRackPlacement", "RackPlacement": try addPlacementSeed(record, dirty: &dirty, context: &context)
-        case "NettworkInterface": try addInterfaceSeed(record, context: &context)
-        case "NettworkIPAddressRecord": try addAddressSeed(record, context: &context)
-        case "NettworkWorkOrder", LocalRecordKind.workOrder: try addWorkOrderSeed(record, dirty: &dirty)
+        case WorkspaceRecordType.rack, WorkspaceRecordType.Legacy.rack: try addRackSeed(record, context: &context)
+        case WorkspaceRecordType.location, WorkspaceRecordType.Legacy.location: try addLocationSeed(record, context: &context)
+        case WorkspaceRecordType.rackPlacement, WorkspaceRecordType.Legacy.rackPlacement: try addPlacementSeed(record, dirty: &dirty, context: &context)
+        case WorkspaceRecordType.interface: try addInterfaceSeed(record, context: &context)
+        case WorkspaceRecordType.ipAddressRecord: try addAddressSeed(record, context: &context)
+        case WorkspaceRecordType.workOrder, LocalRecordKind.workOrder: try addWorkOrderSeed(record, dirty: &dirty)
         default: break
         }
     }

@@ -293,7 +293,7 @@ extension SwiftDataPersistenceStore {
     }
 
     func isInfrastructureRecordType(_ type: String) -> Bool {
-        type.hasPrefix("NettworkWorkspaceTransfer") || type == "NettworkWorkspace"
+        type.hasPrefix(WorkspaceRecordType.workspaceTransferPrefix) || type == WorkspaceRecordType.workspace
     }
 
     func overwrite(

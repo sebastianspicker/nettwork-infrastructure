@@ -49,21 +49,24 @@ enum InventorySearchIndexBuilder {
     }
 
     static let indexAffectingRecordTypes: Set<String> = [
-        "NettworkPhysicalTopology", LocalRecordKind.physicalTopology,
-        "NettworkTemplatePlacementState", "TemplatePlacementState",
-        "NettworkWorkspaceHierarchy", "WorkspaceHierarchy",
-        "NettworkDevice", "Device", "NettworkPort", "Port", "NettworkCable", "Cable",
-        "NettworkDeviceType", "DeviceType", "NettworkModule", "Module",
-        "NettworkInternalLink", "InternalLink", "NettworkTopologyTombstone", "TopologyTombstone",
-        "NettworkLocation", "Location", "NettworkRack", "Rack",
-        "NettworkHierarchyTombstone", "HierarchyTombstone", "NettworkRackPlacement", "RackPlacement",
-        "NettworkIPAddressRecord", "NettworkInterface", "NettworkWorkOrder", LocalRecordKind.workOrder,
+        WorkspaceRecordType.physicalTopology, LocalRecordKind.physicalTopology,
+        WorkspaceRecordType.templatePlacementState, WorkspaceRecordType.Legacy.templatePlacementState,
+        WorkspaceRecordType.workspaceHierarchy, WorkspaceRecordType.Legacy.workspaceHierarchy,
+        WorkspaceRecordType.device, WorkspaceRecordType.Legacy.device, WorkspaceRecordType.port, WorkspaceRecordType.Legacy.port, WorkspaceRecordType.cable,
+        WorkspaceRecordType.Legacy.cable,
+        WorkspaceRecordType.deviceType, WorkspaceRecordType.Legacy.deviceType, WorkspaceRecordType.module, WorkspaceRecordType.Legacy.module,
+        WorkspaceRecordType.internalLink, WorkspaceRecordType.Legacy.internalLink, WorkspaceRecordType.topologyTombstone,
+        WorkspaceRecordType.Legacy.topologyTombstone,
+        WorkspaceRecordType.location, WorkspaceRecordType.Legacy.location, WorkspaceRecordType.rack, WorkspaceRecordType.Legacy.rack,
+        WorkspaceRecordType.hierarchyTombstone, WorkspaceRecordType.Legacy.hierarchyTombstone, WorkspaceRecordType.rackPlacement,
+        WorkspaceRecordType.Legacy.rackPlacement,
+        WorkspaceRecordType.ipAddressRecord, WorkspaceRecordType.interface, WorkspaceRecordType.workOrder, LocalRecordKind.workOrder,
     ]
 
     static let fullRebuildRecordTypes: Set<String> = [
-        "NettworkPhysicalTopology", LocalRecordKind.physicalTopology,
-        "NettworkTemplatePlacementState", "TemplatePlacementState",
-        "NettworkWorkspaceHierarchy", "WorkspaceHierarchy",
+        WorkspaceRecordType.physicalTopology, LocalRecordKind.physicalTopology,
+        WorkspaceRecordType.templatePlacementState, WorkspaceRecordType.Legacy.templatePlacementState,
+        WorkspaceRecordType.workspaceHierarchy, WorkspaceRecordType.Legacy.workspaceHierarchy,
     ]
 
     struct IndexIdentity: Hashable {
@@ -80,6 +83,6 @@ enum InventorySearchIndexBuilder {
     }
 
     static func containsVisibilitySentinel(_ records: [LocalMirrorRecord]) -> Bool {
-        records.contains { $0.recordType.hasPrefix("NettworkWorkspaceTransfer") || $0.recordType == "NettworkWorkspace" }
+        records.contains { $0.recordType.hasPrefix(WorkspaceRecordType.workspaceTransferPrefix) || $0.recordType == WorkspaceRecordType.workspace }
     }
 }

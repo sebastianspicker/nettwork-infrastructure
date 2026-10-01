@@ -28,12 +28,14 @@ struct ProductionMirrorDomainProjection: Sendable {
         let seeds = try Self.seeds(from: records)
         topology = try Self.topology(from: records, seed: seeds.topology)
         hierarchy = try Self.hierarchy(from: records, seed: seeds.hierarchy)
-        placements = try Self.overlayPlacements(seeds.placement?.placements ?? [], from: records, recordTypes: ["NettworkRackPlacement", "RackPlacement"])
+        placements = try Self.overlayPlacements(
+            seeds.placement?.placements ?? [], from: records, recordTypes: [WorkspaceRecordType.rackPlacement, WorkspaceRecordType.Legacy.rackPlacement])
         rackReservations = seeds.placement?.rackReservations ?? []
         anchors = try Self.overlay(
             seeds.placement?.anchors ?? [], from: records, as: FloorPlanAnchor.self,
-            recordTypes: ["NettworkFloorPlanAnchor", "FloorPlanAnchor"])
-        moduleTemplates = try Self.overlay([], from: records, as: ModuleTemplate.self, recordTypes: ["NettworkModuleTemplate", "ModuleTemplate"])
+            recordTypes: [WorkspaceRecordType.floorPlanAnchor, WorkspaceRecordType.Legacy.floorPlanAnchor])
+        moduleTemplates = try Self.overlay(
+            [], from: records, as: ModuleTemplate.self, recordTypes: [WorkspaceRecordType.moduleTemplate, WorkspaceRecordType.Legacy.moduleTemplate])
         try Self.validate(topology: topology, hierarchy: hierarchy, placements: placements, reservations: rackReservations, anchors: anchors)
     }
 
@@ -45,9 +47,11 @@ struct ProductionMirrorDomainProjection: Sendable {
 
     private static func seeds(from records: [LocalMirrorRecord]) throws -> Seeds {
         let placement = try singleAggregate(
-            records, as: TemplatePlacementState.self, recordTypes: ["NettworkTemplatePlacementState", "TemplatePlacementState"])
+            records, as: TemplatePlacementState.self,
+            recordTypes: [WorkspaceRecordType.templatePlacementState, WorkspaceRecordType.Legacy.templatePlacementState])
         let topologyAggregate = try latestTopologyAggregate(records)
-        let hierarchyAggregate = try singleAggregate(records, as: WorkspaceHierarchy.self, recordTypes: ["NettworkWorkspaceHierarchy", "WorkspaceHierarchy"])
+        let hierarchyAggregate = try singleAggregate(
+            records, as: WorkspaceHierarchy.self, recordTypes: [WorkspaceRecordType.workspaceHierarchy, WorkspaceRecordType.Legacy.workspaceHierarchy])
         return Seeds(
             placement: placement, topology: placement?.topology ?? topologyAggregate ?? PhysicalTopology(),
             hierarchy: placement?.hierarchy ?? hierarchyAggregate ?? WorkspaceHierarchy())
@@ -55,19 +59,22 @@ struct ProductionMirrorDomainProjection: Sendable {
 
     private static func topology(from records: [LocalMirrorRecord], seed: PhysicalTopology) throws -> PhysicalTopology {
         PhysicalTopology(
-            deviceTypes: try overlay(seed.deviceTypes, from: records, as: DeviceType.self, recordTypes: ["NettworkDeviceType", "DeviceType"]),
-            devices: try overlay(seed.devices, from: records, as: Device.self, recordTypes: ["NettworkDevice", "Device"]),
-            modules: try overlay(seed.modules, from: records, as: Module.self, recordTypes: ["NettworkModule", "Module"]),
-            ports: try overlay(seed.ports, from: records, as: Port.self, recordTypes: ["NettworkPort", "Port"]),
-            cables: try overlay(seed.cables, from: records, as: Cable.self, recordTypes: ["NettworkCable", "Cable"]),
-            internalLinks: try overlay(seed.internalLinks, from: records, as: InternalLink.self, recordTypes: ["NettworkInternalLink", "InternalLink"]),
+            deviceTypes: try overlay(
+                seed.deviceTypes, from: records, as: DeviceType.self, recordTypes: [WorkspaceRecordType.deviceType, WorkspaceRecordType.Legacy.deviceType]),
+            devices: try overlay(seed.devices, from: records, as: Device.self, recordTypes: [WorkspaceRecordType.device, WorkspaceRecordType.Legacy.device]),
+            modules: try overlay(seed.modules, from: records, as: Module.self, recordTypes: [WorkspaceRecordType.module, WorkspaceRecordType.Legacy.module]),
+            ports: try overlay(seed.ports, from: records, as: Port.self, recordTypes: [WorkspaceRecordType.port, WorkspaceRecordType.Legacy.port]),
+            cables: try overlay(seed.cables, from: records, as: Cable.self, recordTypes: [WorkspaceRecordType.cable, WorkspaceRecordType.Legacy.cable]),
+            internalLinks: try overlay(
+                seed.internalLinks, from: records, as: InternalLink.self,
+                recordTypes: [WorkspaceRecordType.internalLink, WorkspaceRecordType.Legacy.internalLink]),
             reservations: seed.reservations,
             plannedWork: seed.plannedWork,
             tombstones: try overlay(
                 seed.tombstones, from: records, as: TopologyTombstone.self,
                 recordTypes: [
-                    "NettworkTopologyTombstone",
-                    "TopologyTombstone",
+                    WorkspaceRecordType.topologyTombstone,
+                    WorkspaceRecordType.Legacy.topologyTombstone,
                 ]),
             revision: projectionRevision(seed: seed.revision, records: records),
             appliedOperationIDs: seed.appliedOperationIDs
@@ -76,11 +83,12 @@ struct ProductionMirrorDomainProjection: Sendable {
 
     private static func hierarchy(from records: [LocalMirrorRecord], seed: WorkspaceHierarchy) throws -> WorkspaceHierarchy {
         WorkspaceHierarchy(
-            locations: try overlay(seed.locations, from: records, as: Location.self, recordTypes: ["NettworkLocation", "Location"]),
-            racks: try overlay(seed.racks, from: records, as: Rack.self, recordTypes: ["NettworkRack", "Rack"]),
+            locations: try overlay(
+                seed.locations, from: records, as: Location.self, recordTypes: [WorkspaceRecordType.location, WorkspaceRecordType.Legacy.location]),
+            racks: try overlay(seed.racks, from: records, as: Rack.self, recordTypes: [WorkspaceRecordType.rack, WorkspaceRecordType.Legacy.rack]),
             tombstones: try overlay(
                 seed.tombstones, from: records, as: HierarchyTombstone.self,
-                recordTypes: ["NettworkHierarchyTombstone", "HierarchyTombstone"])
+                recordTypes: [WorkspaceRecordType.hierarchyTombstone, WorkspaceRecordType.Legacy.hierarchyTombstone])
         )
     }
 
@@ -111,7 +119,7 @@ struct ProductionMirrorDomainProjection: Sendable {
 
     private static func latestTopologyAggregate(_ records: [LocalMirrorRecord]) throws -> PhysicalTopology? {
         let matches = records.filter {
-            !$0.isTombstone && ["NettworkPhysicalTopology", LocalRecordKind.physicalTopology].contains($0.recordType)
+            !$0.isTombstone && [WorkspaceRecordType.physicalTopology, LocalRecordKind.physicalTopology].contains($0.recordType)
         }
         let values = try matches.map { try decode(PhysicalTopology.self, from: $0) }
         return values.max { $0.revision < $1.revision }

@@ -162,13 +162,13 @@ public actor SwiftDataCloudRecordNameIdentityIndex: CloudRecordNameIdentityIndex
         let candidate: String
         switch persistedType {
         case LocalRecordKind.physicalTopology:
-            candidate = "NettworkPhysicalTopology"
+            candidate = WorkspaceRecordType.physicalTopology
         case LocalRecordKind.workOrder:
             candidate = CloudRecordNaming.workOrderRecordType
         case LocalRecordKind.auditEvent:
             candidate = CloudRecordNaming.auditRecordType
         case LocalRecordKind.prefix:
-            candidate = "NettworkPrefix"
+            candidate = WorkspaceRecordType.prefix
         default:
             candidate = persistedType
         }

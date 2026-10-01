@@ -30,7 +30,7 @@ extension SwiftDataProductionMutationPlanner {
         }
         try candidate.validate()
         snapshot.hierarchy = candidate
-        try changes.save(location, recordType: "Location")
+        try changes.save(location, recordType: WorkspaceRecordType.Legacy.location)
         try saveHierarchyParent(location.parentID, snapshot: snapshot, changes: &changes)
     }
 
@@ -46,7 +46,7 @@ extension SwiftDataProductionMutationPlanner {
             throw ProductionMutationPlannerError.missingHierarchyObject(.object(location.id))
         }
         snapshot.hierarchy = candidate
-        try changes.save(deleted, recordType: "Location")
+        try changes.save(deleted, recordType: WorkspaceRecordType.Legacy.location)
         try saveHierarchyParent(location.parentID, snapshot: snapshot, changes: &changes)
     }
 
@@ -65,7 +65,7 @@ extension SwiftDataProductionMutationPlanner {
         }
         try candidate.validate()
         snapshot.hierarchy = candidate
-        try changes.save(rack, recordType: "Rack")
+        try changes.save(rack, recordType: WorkspaceRecordType.Legacy.rack)
         try saveHierarchyParent(rack.locationID, snapshot: snapshot, changes: &changes)
     }
 
@@ -81,7 +81,7 @@ extension SwiftDataProductionMutationPlanner {
             throw ProductionMutationPlannerError.missingHierarchyObject(.object(rack.id))
         }
         snapshot.hierarchy = candidate
-        try changes.save(deleted, recordType: "Rack")
+        try changes.save(deleted, recordType: WorkspaceRecordType.Legacy.rack)
         try saveHierarchyParent(rack.locationID, snapshot: snapshot, changes: &changes)
     }
 
@@ -94,6 +94,6 @@ extension SwiftDataProductionMutationPlanner {
         else {
             throw ProductionMutationPlannerError.missingHierarchyObject(.object(parentID))
         }
-        try changes.save(parent, recordType: "Location")
+        try changes.save(parent, recordType: WorkspaceRecordType.Legacy.location)
     }
 }

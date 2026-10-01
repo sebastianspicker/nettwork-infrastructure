@@ -20,11 +20,13 @@ public struct CodableCloudRemoteSemanticValidator: CloudRemoteSemanticValidator 
 
     private func validatePayload(of envelope: CloudRecordEnvelope, namespace: PersistenceNamespace) throws {
         switch envelope.recordType {
-        case "NettworkPhysicalTopology", "NettworkWorkspaceHierarchy", "NettworkTemplatePlacementState", "NettworkLocation", "NettworkRack",
-            "NettworkDeviceType", "NettworkPortTemplate",
-            "NettworkModuleTemplate":
+        case WorkspaceRecordType.physicalTopology, WorkspaceRecordType.workspaceHierarchy, WorkspaceRecordType.templatePlacementState,
+            WorkspaceRecordType.location, WorkspaceRecordType.rack,
+            WorkspaceRecordType.deviceType, WorkspaceRecordType.portTemplate,
+            WorkspaceRecordType.moduleTemplate:
             try validateFoundation(envelope)
-        case "NettworkDevice", "NettworkModule", "NettworkRackPlacement", "NettworkFloorPlanAnchor", "NettworkPort", "NettworkCable", "NettworkInternalLink":
+        case WorkspaceRecordType.device, WorkspaceRecordType.module, WorkspaceRecordType.rackPlacement, WorkspaceRecordType.floorPlanAnchor,
+            WorkspaceRecordType.port, WorkspaceRecordType.cable, WorkspaceRecordType.internalLink:
             try validateTopology(envelope)
         case CloudRecordNaming.workOrderRecordType, CloudRecordNaming.reservationLockRecordType, CloudRecordNaming.auditRecordType,
             CloudRecordNaming.receiptRecordType,
@@ -32,10 +34,12 @@ public struct CodableCloudRemoteSemanticValidator: CloudRemoteSemanticValidator 
             CloudRecordNaming.attachmentEvidenceBindingRecordType,
             CloudRecordNaming.floorPlanAssetBindingRecordType, CloudRecordNaming.workspaceAssetRecordType:
             try validateOperational(envelope, namespace: namespace)
-        case "NettworkPrefix", "NettworkVRF", "NettworkIPAddressRecord", "NettworkVLANGroup", "NettworkVLAN", "NettworkInterface",
-            "NettworkIPAddressAssignment", "NettworkInterfaceVLANMembership":
+        case WorkspaceRecordType.prefix, WorkspaceRecordType.vrf, WorkspaceRecordType.ipAddressRecord, WorkspaceRecordType.vlanGroup, WorkspaceRecordType.vlan,
+            WorkspaceRecordType.interface,
+            WorkspaceRecordType.ipAddressAssignment, WorkspaceRecordType.interfaceVLANMembership:
             try validateNetwork(envelope)
-        case "NettworkTopologyTombstone", "NettworkHierarchyTombstone", CloudRecordNaming.workspaceRecordType, CloudRecordNaming.shareRecordType,
+        case WorkspaceRecordType.topologyTombstone, WorkspaceRecordType.hierarchyTombstone, CloudRecordNaming.workspaceRecordType,
+            CloudRecordNaming.shareRecordType,
             CloudRecordNaming.tombstoneRecordType,
             CloudStagedTransferRecordType.session:
             try validateLifecycle(envelope, namespace: namespace)
@@ -45,29 +49,30 @@ public struct CodableCloudRemoteSemanticValidator: CloudRemoteSemanticValidator 
 
     private func validateFoundation(_ envelope: CloudRecordEnvelope) throws {
         switch envelope.recordType {
-        case "NettworkPhysicalTopology": try DefaultTopologyEngine.validate(CloudDeterministicCoding.decode(PhysicalTopology.self, from: envelope.payload))
-        case "NettworkWorkspaceHierarchy": try CloudDeterministicCoding.decode(WorkspaceHierarchy.self, from: envelope.payload).validate()
-        case "NettworkTemplatePlacementState": try CloudDeterministicCoding.decode(TemplatePlacementState.self, from: envelope.payload).validate()
-        case "NettworkLocation": try decodeObject(Location.self, envelope: envelope)
-        case "NettworkRack": try decodeObject(Rack.self, envelope: envelope)
-        case "NettworkDeviceType": try decodeObject(DeviceType.self, envelope: envelope)
-        case "NettworkPortTemplate": try decodeObject(PortTemplate.self, envelope: envelope)
-        case "NettworkModuleTemplate": try decodeObject(ModuleTemplate.self, envelope: envelope)
+        case WorkspaceRecordType.physicalTopology:
+            try DefaultTopologyEngine.validate(CloudDeterministicCoding.decode(PhysicalTopology.self, from: envelope.payload))
+        case WorkspaceRecordType.workspaceHierarchy: try CloudDeterministicCoding.decode(WorkspaceHierarchy.self, from: envelope.payload).validate()
+        case WorkspaceRecordType.templatePlacementState: try CloudDeterministicCoding.decode(TemplatePlacementState.self, from: envelope.payload).validate()
+        case WorkspaceRecordType.location: try decodeObject(Location.self, envelope: envelope)
+        case WorkspaceRecordType.rack: try decodeObject(Rack.self, envelope: envelope)
+        case WorkspaceRecordType.deviceType: try decodeObject(DeviceType.self, envelope: envelope)
+        case WorkspaceRecordType.portTemplate: try decodeObject(PortTemplate.self, envelope: envelope)
+        case WorkspaceRecordType.moduleTemplate: try decodeObject(ModuleTemplate.self, envelope: envelope)
         default: throw CloudMirrorAdapterError.unsupportedSemanticRecord(envelope.recordType)
         }
     }
 
     private func validateTopology(_ envelope: CloudRecordEnvelope) throws {
         switch envelope.recordType {
-        case "NettworkDevice": try decodeObject(Device.self, envelope: envelope)
-        case "NettworkModule": try decodeObject(Module.self, envelope: envelope)
-        case "NettworkRackPlacement":
+        case WorkspaceRecordType.device: try decodeObject(Device.self, envelope: envelope)
+        case WorkspaceRecordType.module: try decodeObject(Module.self, envelope: envelope)
+        case WorkspaceRecordType.rackPlacement:
             let placement = try CloudDeterministicCoding.decode(RackPlacement.self, from: envelope.payload)
             try verify(envelope.resourceKey == .rackPlacement(deviceID: placement.deviceID), envelope, "rack placement identity")
-        case "NettworkFloorPlanAnchor": try decodeObject(FloorPlanAnchor.self, envelope: envelope)
-        case "NettworkPort": try decodeObject(NetworkModel.Port.self, envelope: envelope)
-        case "NettworkCable": try decodeObject(Cable.self, envelope: envelope)
-        case "NettworkInternalLink": try decodeObject(InternalLink.self, envelope: envelope)
+        case WorkspaceRecordType.floorPlanAnchor: try decodeObject(FloorPlanAnchor.self, envelope: envelope)
+        case WorkspaceRecordType.port: try decodeObject(NetworkModel.Port.self, envelope: envelope)
+        case WorkspaceRecordType.cable: try decodeObject(Cable.self, envelope: envelope)
+        case WorkspaceRecordType.internalLink: try decodeObject(InternalLink.self, envelope: envelope)
         default: throw CloudMirrorAdapterError.unsupportedSemanticRecord(envelope.recordType)
         }
     }
@@ -182,24 +187,24 @@ public struct CodableCloudRemoteSemanticValidator: CloudRemoteSemanticValidator 
 
     private func validateNetwork(_ envelope: CloudRecordEnvelope) throws {
         switch envelope.recordType {
-        case "NettworkPrefix": try decodeObject(Prefix.self, envelope: envelope)
-        case "NettworkVRF": try decodeObject(VRF.self, envelope: envelope)
-        case "NettworkIPAddressRecord":
+        case WorkspaceRecordType.prefix: try decodeObject(Prefix.self, envelope: envelope)
+        case WorkspaceRecordType.vrf: try decodeObject(VRF.self, envelope: envelope)
+        case WorkspaceRecordType.ipAddressRecord:
             let value = try CloudDeterministicCoding.decode(IPAddressRecord.self, from: envelope.payload)
             try verify(envelope.resourceKey == .string(value.id), envelope, "IP address resource identity")
-        case "NettworkVLANGroup": try decodeObject(VLANGroup.self, envelope: envelope)
-        case "NettworkVLAN": try decodeObject(VLAN.self, envelope: envelope)
-        case "NettworkInterface": try decodeObject(Interface.self, envelope: envelope)
-        case "NettworkIPAddressAssignment": try decodeObject(IPAddressAssignment.self, envelope: envelope)
-        case "NettworkInterfaceVLANMembership": try decodeObject(InterfaceVLANMembership.self, envelope: envelope)
+        case WorkspaceRecordType.vlanGroup: try decodeObject(VLANGroup.self, envelope: envelope)
+        case WorkspaceRecordType.vlan: try decodeObject(VLAN.self, envelope: envelope)
+        case WorkspaceRecordType.interface: try decodeObject(Interface.self, envelope: envelope)
+        case WorkspaceRecordType.ipAddressAssignment: try decodeObject(IPAddressAssignment.self, envelope: envelope)
+        case WorkspaceRecordType.interfaceVLANMembership: try decodeObject(InterfaceVLANMembership.self, envelope: envelope)
         default: throw CloudMirrorAdapterError.unsupportedSemanticRecord(envelope.recordType)
         }
     }
 
     private func validateLifecycle(_ envelope: CloudRecordEnvelope, namespace: PersistenceNamespace) throws {
         switch envelope.recordType {
-        case "NettworkTopologyTombstone": try decodeAndVerify(TopologyTombstone.self, envelope: envelope)
-        case "NettworkHierarchyTombstone": try decodeAndVerify(HierarchyTombstone.self, envelope: envelope)
+        case WorkspaceRecordType.topologyTombstone: try decodeAndVerify(TopologyTombstone.self, envelope: envelope)
+        case WorkspaceRecordType.hierarchyTombstone: try decodeAndVerify(HierarchyTombstone.self, envelope: envelope)
         case CloudRecordNaming.workspaceRecordType:
             let value = try CloudDeterministicCoding.decode(CloudWorkspaceRecord.self, from: envelope.payload)
             try verify(value.workspaceID == namespace.workspaceID, envelope, "workspace identity")

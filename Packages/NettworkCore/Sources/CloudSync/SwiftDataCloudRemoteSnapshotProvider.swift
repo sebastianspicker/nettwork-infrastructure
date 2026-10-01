@@ -214,10 +214,10 @@ public struct SwiftDataCloudRemoteSnapshotProvider: CloudRemoteSnapshotProvider 
 
     private func cloudRecordType(for persistedType: String) -> String {
         switch persistedType {
-        case LocalRecordKind.physicalTopology: "NettworkPhysicalTopology"
+        case LocalRecordKind.physicalTopology: WorkspaceRecordType.physicalTopology
         case LocalRecordKind.workOrder: CloudRecordNaming.workOrderRecordType
         case LocalRecordKind.auditEvent: CloudRecordNaming.auditRecordType
-        case LocalRecordKind.prefix: "NettworkPrefix"
+        case LocalRecordKind.prefix: WorkspaceRecordType.prefix
         default: persistedType
         }
     }

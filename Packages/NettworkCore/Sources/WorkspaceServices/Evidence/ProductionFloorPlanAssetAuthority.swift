@@ -170,10 +170,10 @@ public actor SwiftDataFloorPlanReadProjection: FloorPlanReadProjecting {
 
     public func floorPlan(for floorID: ObjectID, in namespace: PersistenceNamespace) async throws -> FloorPlanReadProjection {
         guard namespace == account.namespace else { throw ProductionAdapterError.namespaceMismatch }
-        let records = try await persistence.mirroredRecords(in: namespace, recordType: "NettworkFloorPlanAnchor", limit: Self.anchorLimit)
+        let records = try await persistence.mirroredRecords(in: namespace, recordType: WorkspaceRecordType.floorPlanAnchor, limit: Self.anchorLimit)
         let anchors = try records.compactMap { record -> FloorPlanAnchor? in
             guard !record.isTombstone,
-                record.recordType == "NettworkFloorPlanAnchor",
+                record.recordType == WorkspaceRecordType.floorPlanAnchor,
                 let payload = record.payload
             else { return nil }
             let anchor = try CloudDeterministicCoding.decode(FloorPlanAnchor.self, from: payload)

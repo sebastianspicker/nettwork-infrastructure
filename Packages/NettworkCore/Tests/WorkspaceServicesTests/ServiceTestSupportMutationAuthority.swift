@@ -114,9 +114,8 @@ struct MutationAuthorityHarness {
             title: "Patch switch to panel", kind: .connect, ticket: ticket, resourceKeys: operation.productionResourceKeys, operations: [operation])
     }
 
-    /// A draft with exactly one reserved resource. Seeded server work orders
-    /// use it because a multi-member `Set<ResourceKey>` has no stable
-    /// encoding order, which the authority's canonical decoding rejects.
+    /// A draft with exactly one reserved resource, for tests whose seeded
+    /// server work orders only need the smallest valid reservation.
     func singleResourceDraft(ticket: String = "CHG-200") -> WorkOrderDraft {
         let operation = PlannedWorkOperation.topology(
             .markUnavailable(MarkPortUnavailableTopologyCommand(portID: topology.spareSwitchPort.id, isUnavailable: true)))

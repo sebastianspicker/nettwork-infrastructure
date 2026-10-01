@@ -64,7 +64,7 @@ extension AuthoritativeActivationMutationValidator {
             return try validateFloorPlanAssetActivation(mutation, bindingSaves: floorPlanBindingSaves)
         }
         let bindingSaves = mutation.saves.filter {
-            $0.recordType == "NettworkAttachmentEvidenceBinding"
+            $0.recordType == WorkspaceRecordType.attachmentEvidenceBinding
         }
         guard let bindingSave = bindingSaves.first else {
             throw AuthoritativeActivationMutationValidationError.invalidActivationRecordSet(sentinel.key)
@@ -87,7 +87,7 @@ extension AuthoritativeActivationMutationValidator {
             binding.operationID == mutation.operationID, binding.auditEventID == mutation.auditEvent.id,
             let workOrderAssertion = mutation.readAssertions.first,
             workOrderAssertion.resourceKey == .object(binding.workOrderID),
-            workOrderAssertion.recordType == "NettworkWorkOrder", workOrderAssertion.schemaVersion == 1,
+            workOrderAssertion.recordType == WorkspaceRecordType.workOrder, workOrderAssertion.schemaVersion == 1,
             let workOrder = try? StableActivationPayloadCoding.decode(WorkOrder.self, from: workOrderAssertion.encodedRecord),
             workOrder.id == binding.workOrderID, workOrder.kind == .floorPlan,
             workOrder.status == .completed, workOrder.intentDigest == binding.intentDigest

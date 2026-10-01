@@ -77,10 +77,15 @@ import XCTest
             _ = await store.activateLease(for: harness.namespace)
             let staging = try FileBackedPrivateAttachmentStaging(root: root)
             let current = CurrentContext(context: context)
-            // The quota reservation clock is pinned to whole seconds: the local
-            // reservation record stores its expiry at full precision but its
-            // ISO 8601 payload only to the second, so a sub-second expiry is
-            // rejected as malformed when it is read back (reported separately).
+            // Pins only this authority's side of binding. The clock is pinned to
+            // whole seconds because a sub-second reservation expiry fails local
+            // read-back (ISO 8601 payload vs. full-precision column). Attachment
+            // evidence is inconsistent across components and deliberately left
+            // unrepaired: completion and the remote binding validator expect the
+            // work order's intent digest and a completed work order, while
+            // activation validation requires the binding's own digest during
+            // execution (CompositeCloudRemoteReferenceAttachments.swift,
+            // AttachmentEvidenceActivationValidation.swift).
             let authority = ProductionAttachmentEvidenceAuthority(
                 sessionAuthorizer: harness.session.authorizer, exactRecords: harness.server, mutations: harness.server, persistence: store,
                 policy: try ProductionAttachmentEvidencePolicy(

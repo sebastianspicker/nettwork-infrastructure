@@ -79,7 +79,7 @@ extension SwiftDataProductionMutationPlanner {
             )
         }
         snapshot.topology.ports.append(desired)
-        try changes.save(desired, recordType: "Port")
+        try changes.save(desired, recordType: WorkspaceRecordType.Legacy.port)
     }
 
     private func replaceMigratedPort(
@@ -96,14 +96,14 @@ extension SwiftDataProductionMutationPlanner {
         }
         for cable in connected {
             snapshot.topology.cables.removeAll { $0.id == cable.id }
-            try changes.tombstone(cable, recordType: "Cable")
+            try changes.tombstone(cable, recordType: WorkspaceRecordType.Legacy.cable)
         }
         if impact.action == .remove {
             guard impact.desiredPort == nil else {
                 throw ProductionMutationPlannerError.duplicateMutation(.object(current.id))
             }
             snapshot.topology.ports.removeAll { $0.id == current.id }
-            try changes.tombstone(current, recordType: "Port")
+            try changes.tombstone(current, recordType: WorkspaceRecordType.Legacy.port)
             return
         }
         try reconfigurePort(impact, current: current, deviceID: deviceID, snapshot: &snapshot, changes: &changes)
@@ -123,7 +123,7 @@ extension SwiftDataProductionMutationPlanner {
             throw ProductionMutationPlannerError.missingTopologyObject(.object(current.id))
         }
         snapshot.topology.ports[index] = desired
-        try changes.save(desired, recordType: "Port")
+        try changes.save(desired, recordType: WorkspaceRecordType.Legacy.port)
     }
 
     func applyFloorPlan(_ operation: PlannedFloorPlanOperation, snapshot: inout Snapshot, changes: inout ChangeAccumulator) throws {
@@ -134,14 +134,14 @@ extension SwiftDataProductionMutationPlanner {
             } else {
                 snapshot.anchors.append(anchor)
             }
-            try changes.save(anchor, recordType: "FloorPlanAnchor")
+            try changes.save(anchor, recordType: WorkspaceRecordType.Legacy.floorPlanAnchor)
 
         case .remove(let anchor):
             guard let index = snapshot.anchors.firstIndex(of: anchor) else {
                 throw ProductionMutationPlannerError.missingFloorPlanAnchor(.object(anchor.id))
             }
             snapshot.anchors.remove(at: index)
-            try changes.tombstone(anchor, recordType: "FloorPlanAnchor")
+            try changes.tombstone(anchor, recordType: WorkspaceRecordType.Legacy.floorPlanAnchor)
 
         case .bindAsset(let planned):
             guard
@@ -216,34 +216,34 @@ extension SwiftDataProductionMutationPlanner {
             try changes.tombstone(
                 placement,
                 resourceKey: .rackPlacement(deviceID: placement.deviceID),
-                recordType: "RackPlacement"
+                recordType: WorkspaceRecordType.Legacy.rackPlacement
             )
         }
         snapshot.placements.removeAll { $0.deviceID == deviceID }
-        for anchor in state.anchors { try changes.tombstone(anchor, recordType: "FloorPlanAnchor") }
+        for anchor in state.anchors { try changes.tombstone(anchor, recordType: WorkspaceRecordType.Legacy.floorPlanAnchor) }
         snapshot.anchors.removeAll { $0.objectID == deviceID }
     }
 
     private func removeIPAMState(_ state: DeviceDecommissionState, snapshot: inout Snapshot, changes: inout ChangeAccumulator) throws {
         for assignment in state.assignments {
             snapshot.assignments.removeValue(forKey: assignment.id)
-            try changes.tombstone(assignment, recordType: "IPAddressAssignment")
+            try changes.tombstone(assignment, recordType: WorkspaceRecordType.Legacy.ipAddressAssignment)
         }
         for membership in state.memberships {
             snapshot.memberships.removeValue(forKey: membership.id)
-            try changes.tombstone(membership, recordType: "InterfaceVLANMembership")
+            try changes.tombstone(membership, recordType: WorkspaceRecordType.Legacy.interfaceVLANMembership)
         }
         for address in state.addresses {
             var unassigned = address
             unassigned.assignedInterfaceID = nil
             snapshot.addresses[address.id] = unassigned
-            try changes.saveStringKeyed(unassigned, resourceKey: .string(unassigned.id), recordType: "IPAddressRecord")
+            try changes.saveStringKeyed(unassigned, resourceKey: .string(unassigned.id), recordType: WorkspaceRecordType.Legacy.ipAddressRecord)
         }
         for interface in state.interfaces {
             var tombstoned = interface
             tombstoned.tombstone(at: changes.deletedAt)
             snapshot.interfaces[interface.id] = tombstoned
-            try changes.save(tombstoned, recordType: "Interface")
+            try changes.save(tombstoned, recordType: WorkspaceRecordType.Legacy.interface)
         }
     }
 

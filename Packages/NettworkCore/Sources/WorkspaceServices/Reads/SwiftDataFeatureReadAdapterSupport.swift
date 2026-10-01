@@ -298,8 +298,8 @@ extension Array where Element == LocalMirrorRecord {
 
     private static func persistenceRecordTypes(for cloudRecordType: String) -> Set<String> {
         switch cloudRecordType {
-        case "NettworkPhysicalTopology": [cloudRecordType, LocalRecordKind.physicalTopology]
-        case "NettworkPrefix": [cloudRecordType, LocalRecordKind.prefix]
+        case WorkspaceRecordType.physicalTopology: [cloudRecordType, LocalRecordKind.physicalTopology]
+        case WorkspaceRecordType.prefix: [cloudRecordType, LocalRecordKind.prefix]
         case CloudRecordNaming.workOrderRecordType: [cloudRecordType, LocalRecordKind.workOrder]
         case CloudRecordNaming.auditRecordType: [cloudRecordType, LocalRecordKind.auditEvent]
         default: [cloudRecordType]

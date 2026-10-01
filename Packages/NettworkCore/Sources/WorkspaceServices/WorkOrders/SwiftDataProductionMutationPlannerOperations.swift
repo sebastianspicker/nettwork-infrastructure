@@ -66,7 +66,7 @@ extension SwiftDataProductionMutationPlanner {
         try validateDeviceTemplateChange(kind: kind, target: target, sourceTemplateID: sourceTemplateID, migrations: migrations, snapshot: snapshot)
         snapshot.deviceTypes[target.id] = target
         replaceDeviceType(target, in: &snapshot.topology)
-        try changes.save(target, recordType: "DeviceType")
+        try changes.save(target, recordType: WorkspaceRecordType.Legacy.deviceType)
         for migration in migrations {
             try applyMigration(migration, target: target, snapshot: &snapshot, changes: &changes)
         }
@@ -124,7 +124,7 @@ extension SwiftDataProductionMutationPlanner {
         if let index = snapshot.topology.devices.firstIndex(where: { $0.id == device.id }) {
             snapshot.topology.devices[index] = device
         }
-        try changes.save(device, recordType: "Device")
+        try changes.save(device, recordType: WorkspaceRecordType.Legacy.device)
     }
 
     private func applyModuleTemplate(
@@ -133,7 +133,7 @@ extension SwiftDataProductionMutationPlanner {
         try TemplateCatalog.validate(moduleTemplate: target)
         try validateModuleTemplateChange(kind: kind, target: target, sourceTemplateID: sourceTemplateID, snapshot: snapshot)
         snapshot.moduleTemplates[target.id] = target
-        try changes.save(target, recordType: "ModuleTemplate")
+        try changes.save(target, recordType: WorkspaceRecordType.Legacy.moduleTemplate)
     }
 
     private func validateModuleTemplateChange(

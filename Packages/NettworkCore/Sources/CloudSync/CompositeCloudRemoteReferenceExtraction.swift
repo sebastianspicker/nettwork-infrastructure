@@ -7,16 +7,20 @@ extension CompositeCloudRemoteReferenceValidator {
     func references(for envelope: CloudRecordEnvelope) throws -> RecordReferences {
         if envelope.isDeleted { return try deletedReferences(for: envelope) }
         switch envelope.recordType {
-        case "NettworkLocation", "NettworkRack", "NettworkDeviceType", "NettworkPortTemplate", "NettworkModuleTemplate", "NettworkPhysicalTopology",
-            "NettworkWorkspaceHierarchy",
-            "NettworkTemplatePlacementState":
+        case WorkspaceRecordType.location, WorkspaceRecordType.rack, WorkspaceRecordType.deviceType, WorkspaceRecordType.portTemplate,
+            WorkspaceRecordType.moduleTemplate, WorkspaceRecordType.physicalTopology,
+            WorkspaceRecordType.workspaceHierarchy,
+            WorkspaceRecordType.templatePlacementState:
             return try foundationReferences(envelope)
-        case "NettworkDevice", "NettworkModule", "NettworkRackPlacement", "NettworkFloorPlanAnchor", "NettworkPort", "NettworkCable", "NettworkInternalLink",
-            "NettworkTopologyTombstone",
-            "NettworkHierarchyTombstone":
+        case WorkspaceRecordType.device, WorkspaceRecordType.module, WorkspaceRecordType.rackPlacement, WorkspaceRecordType.floorPlanAnchor,
+            WorkspaceRecordType.port, WorkspaceRecordType.cable, WorkspaceRecordType.internalLink,
+            WorkspaceRecordType.topologyTombstone,
+            WorkspaceRecordType.hierarchyTombstone:
             return try topologyReferences(envelope)
-        case "NettworkPrefix", "NettworkVRF", "NettworkIPAddressRecord", "NettworkVLANGroup": return try addressReferences(envelope)
-        case "NettworkVLAN", "NettworkInterface", "NettworkIPAddressAssignment", "NettworkInterfaceVLANMembership": return try networkReferences(envelope)
+        case WorkspaceRecordType.prefix, WorkspaceRecordType.vrf, WorkspaceRecordType.ipAddressRecord, WorkspaceRecordType.vlanGroup:
+            return try addressReferences(envelope)
+        case WorkspaceRecordType.vlan, WorkspaceRecordType.interface, WorkspaceRecordType.ipAddressAssignment, WorkspaceRecordType.interfaceVLANMembership:
+            return try networkReferences(envelope)
         case CloudRecordNaming.workOrderRecordType, CloudRecordNaming.reservationLockRecordType, CloudRecordNaming.auditRecordType,
             CloudRecordNaming.receiptRecordType,
             CloudRecordNaming.attachmentEvidenceQuotaLedgerRecordType:
@@ -41,15 +45,16 @@ extension CompositeCloudRemoteReferenceValidator {
 
     private func foundationReferences(_ envelope: CloudRecordEnvelope) throws -> RecordReferences {
         switch envelope.recordType {
-        case "NettworkLocation":
+        case WorkspaceRecordType.location:
             let value = try CloudDeterministicCoding.decode(Location.self, from: envelope.payload)
             return value.deletedAt == nil ? live(value.parentID.map { [$0] } ?? []) : deletion(envelope)
-        case "NettworkRack":
+        case WorkspaceRecordType.rack:
             let value = try CloudDeterministicCoding.decode(Rack.self, from: envelope.payload)
             return value.deletedAt == nil ? live([value.locationID]) : deletion(envelope)
-        case "NettworkDeviceType":
+        case WorkspaceRecordType.deviceType:
             return live(try CloudDeterministicCoding.decode(DeviceType.self, from: envelope.payload).moduleSlots.flatMap(\.allowedModuleTemplateIDs))
-        case "NettworkPortTemplate", "NettworkModuleTemplate", "NettworkPhysicalTopology", "NettworkWorkspaceHierarchy", "NettworkTemplatePlacementState":
+        case WorkspaceRecordType.portTemplate, WorkspaceRecordType.moduleTemplate, WorkspaceRecordType.physicalTopology, WorkspaceRecordType.workspaceHierarchy,
+            WorkspaceRecordType.templatePlacementState:
             return RecordReferences()
         default: throw CloudMirrorAdapterError.unsupportedSemanticRecord(envelope.recordType)
         }
@@ -57,9 +62,10 @@ extension CompositeCloudRemoteReferenceValidator {
 
     private func topologyReferences(_ envelope: CloudRecordEnvelope) throws -> RecordReferences {
         switch envelope.recordType {
-        case "NettworkDevice", "NettworkModule", "NettworkRackPlacement", "NettworkFloorPlanAnchor", "NettworkPort":
+        case WorkspaceRecordType.device, WorkspaceRecordType.module, WorkspaceRecordType.rackPlacement, WorkspaceRecordType.floorPlanAnchor,
+            WorkspaceRecordType.port:
             return try topologyObjectReferences(envelope)
-        case "NettworkCable", "NettworkInternalLink", "NettworkTopologyTombstone", "NettworkHierarchyTombstone":
+        case WorkspaceRecordType.cable, WorkspaceRecordType.internalLink, WorkspaceRecordType.topologyTombstone, WorkspaceRecordType.hierarchyTombstone:
             return try topologyRelationshipReferences(envelope)
         default: throw CloudMirrorAdapterError.unsupportedSemanticRecord(envelope.recordType)
         }
@@ -67,19 +73,19 @@ extension CompositeCloudRemoteReferenceValidator {
 
     private func topologyObjectReferences(_ envelope: CloudRecordEnvelope) throws -> RecordReferences {
         switch envelope.recordType {
-        case "NettworkDevice":
+        case WorkspaceRecordType.device:
             let value = try CloudDeterministicCoding.decode(Device.self, from: envelope.payload)
             return live([value.typeID] + (value.rackID.map { [$0] } ?? []))
-        case "NettworkModule":
+        case WorkspaceRecordType.module:
             let value = try CloudDeterministicCoding.decode(Module.self, from: envelope.payload)
             return live([value.deviceID, value.templateID])
-        case "NettworkRackPlacement":
+        case WorkspaceRecordType.rackPlacement:
             let value = try CloudDeterministicCoding.decode(RackPlacement.self, from: envelope.payload)
             return live([value.deviceID, value.rackID])
-        case "NettworkFloorPlanAnchor":
+        case WorkspaceRecordType.floorPlanAnchor:
             let value = try CloudDeterministicCoding.decode(FloorPlanAnchor.self, from: envelope.payload)
             return live([value.objectID, value.floorID])
-        case "NettworkPort":
+        case WorkspaceRecordType.port:
             let value = try CloudDeterministicCoding.decode(NetworkModel.Port.self, from: envelope.payload)
             return live([value.deviceID] + (value.moduleID.map { [$0] } ?? []))
         default: throw CloudMirrorAdapterError.unsupportedSemanticRecord(envelope.recordType)
@@ -88,22 +94,22 @@ extension CompositeCloudRemoteReferenceValidator {
 
     private func topologyRelationshipReferences(_ envelope: CloudRecordEnvelope) throws -> RecordReferences {
         switch envelope.recordType {
-        case "NettworkCable":
+        case WorkspaceRecordType.cable:
             let value = try CloudDeterministicCoding.decode(Cable.self, from: envelope.payload)
             return live([value.endpointA, value.endpointB])
-        case "NettworkInternalLink":
+        case WorkspaceRecordType.internalLink:
             let value = try CloudDeterministicCoding.decode(InternalLink.self, from: envelope.payload)
             return live([value.endpointA, value.endpointB])
-        case "NettworkTopologyTombstone": return tombstone(try CloudDeterministicCoding.decode(TopologyTombstone.self, from: envelope.payload).id)
-        case "NettworkHierarchyTombstone": return tombstone(try CloudDeterministicCoding.decode(HierarchyTombstone.self, from: envelope.payload).id)
+        case WorkspaceRecordType.topologyTombstone: return tombstone(try CloudDeterministicCoding.decode(TopologyTombstone.self, from: envelope.payload).id)
+        case WorkspaceRecordType.hierarchyTombstone: return tombstone(try CloudDeterministicCoding.decode(HierarchyTombstone.self, from: envelope.payload).id)
         default: throw CloudMirrorAdapterError.unsupportedSemanticRecord(envelope.recordType)
         }
     }
 
     private func addressReferences(_ envelope: CloudRecordEnvelope) throws -> RecordReferences {
         switch envelope.recordType {
-        case "NettworkPrefix": return try prefixReferences(envelope)
-        case "NettworkVRF", "NettworkIPAddressRecord", "NettworkVLANGroup":
+        case WorkspaceRecordType.prefix: return try prefixReferences(envelope)
+        case WorkspaceRecordType.vrf, WorkspaceRecordType.ipAddressRecord, WorkspaceRecordType.vlanGroup:
             return try addressRecordReferences(envelope)
         default: throw CloudMirrorAdapterError.unsupportedSemanticRecord(envelope.recordType)
         }
@@ -116,12 +122,13 @@ extension CompositeCloudRemoteReferenceValidator {
 
     private func addressRecordReferences(_ envelope: CloudRecordEnvelope) throws -> RecordReferences {
         switch envelope.recordType {
-        case "NettworkVRF": return try CloudDeterministicCoding.decode(VRF.self, from: envelope.payload).isActive ? RecordReferences() : deletion(envelope)
-        case "NettworkIPAddressRecord":
+        case WorkspaceRecordType.vrf:
+            return try CloudDeterministicCoding.decode(VRF.self, from: envelope.payload).isActive ? RecordReferences() : deletion(envelope)
+        case WorkspaceRecordType.ipAddressRecord:
             let value = try CloudDeterministicCoding.decode(IPAddressRecord.self, from: envelope.payload)
             return value.isActive
                 ? live([value.vrfID] + (value.assignedInterfaceID.map { [$0] } ?? [])) : RecordReferences(deletedResourceKeys: [.string(value.id)])
-        case "NettworkVLANGroup":
+        case WorkspaceRecordType.vlanGroup:
             return try CloudDeterministicCoding.decode(VLANGroup.self, from: envelope.payload).isActive ? RecordReferences() : deletion(envelope)
         default: throw CloudMirrorAdapterError.unsupportedSemanticRecord(envelope.recordType)
         }
@@ -129,18 +136,18 @@ extension CompositeCloudRemoteReferenceValidator {
 
     private func networkReferences(_ envelope: CloudRecordEnvelope) throws -> RecordReferences {
         switch envelope.recordType {
-        case "NettworkVLAN", "NettworkInterface": return try networkConfigurationReferences(envelope)
-        case "NettworkIPAddressAssignment", "NettworkInterfaceVLANMembership": return try networkBindingReferences(envelope)
+        case WorkspaceRecordType.vlan, WorkspaceRecordType.interface: return try networkConfigurationReferences(envelope)
+        case WorkspaceRecordType.ipAddressAssignment, WorkspaceRecordType.interfaceVLANMembership: return try networkBindingReferences(envelope)
         default: throw CloudMirrorAdapterError.unsupportedSemanticRecord(envelope.recordType)
         }
     }
 
     private func networkConfigurationReferences(_ envelope: CloudRecordEnvelope) throws -> RecordReferences {
         switch envelope.recordType {
-        case "NettworkVLAN":
+        case WorkspaceRecordType.vlan:
             let value = try CloudDeterministicCoding.decode(VLAN.self, from: envelope.payload)
             return value.isActive ? live([value.groupID]) : deletion(envelope)
-        case "NettworkInterface":
+        case WorkspaceRecordType.interface:
             let value = try CloudDeterministicCoding.decode(Interface.self, from: envelope.payload)
             return value.isActive ? live([value.deviceID] + (value.physicalPortID.map { [$0] } ?? []) + (value.vlanID.map { [$0] } ?? [])) : deletion(envelope)
         default: throw CloudMirrorAdapterError.unsupportedSemanticRecord(envelope.recordType)
@@ -149,10 +156,10 @@ extension CompositeCloudRemoteReferenceValidator {
 
     private func networkBindingReferences(_ envelope: CloudRecordEnvelope) throws -> RecordReferences {
         switch envelope.recordType {
-        case "NettworkIPAddressAssignment":
+        case WorkspaceRecordType.ipAddressAssignment:
             let value = try CloudDeterministicCoding.decode(IPAddressAssignment.self, from: envelope.payload)
             return value.isActive ? RecordReferences(requiredLiveReferences: [.string(value.addressID), .object(value.interfaceID)]) : deletion(envelope)
-        case "NettworkInterfaceVLANMembership":
+        case WorkspaceRecordType.interfaceVLANMembership:
             let value = try CloudDeterministicCoding.decode(InterfaceVLANMembership.self, from: envelope.payload)
             return value.isActive ? live([value.interfaceID, value.vlanID]) : deletion(envelope)
         default: throw CloudMirrorAdapterError.unsupportedSemanticRecord(envelope.recordType)

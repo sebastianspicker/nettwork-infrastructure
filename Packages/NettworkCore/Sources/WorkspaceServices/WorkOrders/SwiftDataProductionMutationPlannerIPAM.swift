@@ -41,13 +41,13 @@ extension SwiftDataProductionMutationPlanner {
         let desiredIDs = Set(result.prefixes.map(\.id))
         for prefix in snapshot.prefixes.values where prefix.vrfID == vrf.id && !desiredIDs.contains(prefix.id) {
             snapshot.prefixes.removeValue(forKey: prefix.id)
-            try changes.tombstone(prefix, recordType: "Prefix")
+            try changes.tombstone(prefix, recordType: WorkspaceRecordType.Legacy.prefix)
         }
         snapshot.vrfs[vrf.id] = result.vrf
-        try changes.save(result.vrf, recordType: "VRF")
+        try changes.save(result.vrf, recordType: WorkspaceRecordType.Legacy.vrf)
         for prefix in result.prefixes {
             snapshot.prefixes[prefix.id] = prefix
-            try changes.save(prefix, recordType: "Prefix")
+            try changes.save(prefix, recordType: WorkspaceRecordType.Legacy.prefix)
         }
     }
 
@@ -98,10 +98,10 @@ extension SwiftDataProductionMutationPlanner {
         }
         guard desiredByID[assignment.id] == nil else { return }
         snapshot.assignments.removeValue(forKey: assignment.id)
-        try changes.tombstone(assignment, recordType: "IPAddressAssignment")
+        try changes.tombstone(assignment, recordType: WorkspaceRecordType.Legacy.ipAddressAssignment)
         address.assignedInterfaceID = nil
         snapshot.addresses[address.id] = address
-        try changes.saveStringKeyed(address, resourceKey: .string(address.id), recordType: "IPAddressRecord")
+        try changes.saveStringKeyed(address, resourceKey: .string(address.id), recordType: WorkspaceRecordType.Legacy.ipAddressRecord)
     }
 
     private func saveAssignment(
@@ -114,12 +114,12 @@ extension SwiftDataProductionMutationPlanner {
         try validateAssignmentPrecondition(assignment, current: currentByID[assignment.id], interfaceID: interfaceID, address: address, snapshot: snapshot)
         snapshot.assignments[assignment.id] = assignment
         if currentByID[assignment.id] != assignment {
-            try changes.save(assignment, recordType: "IPAddressAssignment")
+            try changes.save(assignment, recordType: WorkspaceRecordType.Legacy.ipAddressAssignment)
         }
         if address.assignedInterfaceID != interfaceID {
             address.assignedInterfaceID = interfaceID
             snapshot.addresses[address.id] = address
-            try changes.saveStringKeyed(address, resourceKey: .string(address.id), recordType: "IPAddressRecord")
+            try changes.saveStringKeyed(address, resourceKey: .string(address.id), recordType: WorkspaceRecordType.Legacy.ipAddressRecord)
         }
     }
 
@@ -145,7 +145,7 @@ extension SwiftDataProductionMutationPlanner {
         let desiredByID = Dictionary(uniqueKeysWithValues: desired.map { ($0.id, $0) })
         for membership in current where desiredByID[membership.id] == nil {
             snapshot.memberships.removeValue(forKey: membership.id)
-            try changes.tombstone(membership, recordType: "InterfaceVLANMembership")
+            try changes.tombstone(membership, recordType: WorkspaceRecordType.Legacy.interfaceVLANMembership)
         }
         for membership in desired {
             try saveMembership(membership, currentByID: currentByID, snapshot: &snapshot, changes: &changes)
@@ -188,7 +188,7 @@ extension SwiftDataProductionMutationPlanner {
         }
         snapshot.memberships[membership.id] = membership
         if currentByID[membership.id] != membership {
-            try changes.save(membership, recordType: "InterfaceVLANMembership")
+            try changes.save(membership, recordType: WorkspaceRecordType.Legacy.interfaceVLANMembership)
         }
     }
 

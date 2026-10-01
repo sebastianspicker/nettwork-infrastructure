@@ -9,30 +9,30 @@ import WorkspaceChangeControl
 
 struct MirrorProjection {
     static let featureRecordTypes: Set<String> = [
-        "NettworkPhysicalTopology", LocalRecordKind.physicalTopology,
-        "NettworkDeviceType", "NettworkModuleTemplate", "NettworkDevice", "NettworkModule", "NettworkPort",
-        "NettworkCable", "NettworkInternalLink", "NettworkTopologyTombstone",
-        "NettworkWorkspaceHierarchy", "NettworkLocation", "NettworkRack",
-        "NettworkHierarchyTombstone", "NettworkTemplatePlacementState", "NettworkRackPlacement",
-        "NettworkFloorPlanAnchor", "FloorPlanAnchor",
-        "NettworkVRF", "NettworkPrefix",
-        LocalRecordKind.prefix, "NettworkIPAddressRecord", "NettworkVLANGroup",
-        "NettworkVLAN", "NettworkInterface", "NettworkIPAddressAssignment",
-        "NettworkInterfaceVLANMembership", CloudRecordNaming.auditRecordType,
+        WorkspaceRecordType.physicalTopology, LocalRecordKind.physicalTopology,
+        WorkspaceRecordType.deviceType, WorkspaceRecordType.moduleTemplate, WorkspaceRecordType.device, WorkspaceRecordType.module, WorkspaceRecordType.port,
+        WorkspaceRecordType.cable, WorkspaceRecordType.internalLink, WorkspaceRecordType.topologyTombstone,
+        WorkspaceRecordType.workspaceHierarchy, WorkspaceRecordType.location, WorkspaceRecordType.rack,
+        WorkspaceRecordType.hierarchyTombstone, WorkspaceRecordType.templatePlacementState, WorkspaceRecordType.rackPlacement,
+        WorkspaceRecordType.floorPlanAnchor, WorkspaceRecordType.Legacy.floorPlanAnchor,
+        WorkspaceRecordType.vrf, WorkspaceRecordType.prefix,
+        LocalRecordKind.prefix, WorkspaceRecordType.ipAddressRecord, WorkspaceRecordType.vlanGroup,
+        WorkspaceRecordType.vlan, WorkspaceRecordType.interface, WorkspaceRecordType.ipAddressAssignment,
+        WorkspaceRecordType.interfaceVLANMembership, CloudRecordNaming.auditRecordType,
         LocalRecordKind.auditEvent, CloudRecordNaming.workOrderRecordType,
         LocalRecordKind.workOrder, CloudRecordNaming.attachmentEvidenceBindingRecordType,
         CloudRecordNaming.floorPlanAssetBindingRecordType,
     ]
     static let csvExportRecordTypes: Set<String> = [
-        "NettworkPhysicalTopology", LocalRecordKind.physicalTopology,
-        "NettworkDeviceType", "NettworkModuleTemplate", "NettworkDevice", "NettworkModule", "NettworkPort",
-        "NettworkCable", "NettworkInternalLink", "NettworkTopologyTombstone",
-        "NettworkWorkspaceHierarchy", "NettworkLocation", "NettworkRack",
-        "NettworkHierarchyTombstone", "NettworkTemplatePlacementState", "NettworkRackPlacement",
-        "NettworkFloorPlanAnchor", "FloorPlanAnchor",
-        "NettworkVRF", "NettworkPrefix", LocalRecordKind.prefix, "NettworkIPAddressRecord",
-        "NettworkVLANGroup", "NettworkVLAN", "NettworkInterface", "NettworkIPAddressAssignment",
-        "NettworkInterfaceVLANMembership",
+        WorkspaceRecordType.physicalTopology, LocalRecordKind.physicalTopology,
+        WorkspaceRecordType.deviceType, WorkspaceRecordType.moduleTemplate, WorkspaceRecordType.device, WorkspaceRecordType.module, WorkspaceRecordType.port,
+        WorkspaceRecordType.cable, WorkspaceRecordType.internalLink, WorkspaceRecordType.topologyTombstone,
+        WorkspaceRecordType.workspaceHierarchy, WorkspaceRecordType.location, WorkspaceRecordType.rack,
+        WorkspaceRecordType.hierarchyTombstone, WorkspaceRecordType.templatePlacementState, WorkspaceRecordType.rackPlacement,
+        WorkspaceRecordType.floorPlanAnchor, WorkspaceRecordType.Legacy.floorPlanAnchor,
+        WorkspaceRecordType.vrf, WorkspaceRecordType.prefix, LocalRecordKind.prefix, WorkspaceRecordType.ipAddressRecord,
+        WorkspaceRecordType.vlanGroup, WorkspaceRecordType.vlan, WorkspaceRecordType.interface, WorkspaceRecordType.ipAddressAssignment,
+        WorkspaceRecordType.interfaceVLANMembership,
     ]
 
     let records: [LocalMirrorRecord]
@@ -77,15 +77,16 @@ struct MirrorProjection {
         placements = normalized.placements
         rackReservations = normalized.rackReservations
         anchors = normalized.anchors
-        vrfs = try self.records.decoded(VRF.self, recordType: "NettworkVRF", expectedResourceKey: { .object($0.id) })
-        prefixes = try self.records.decoded(Prefix.self, recordType: "NettworkPrefix", expectedResourceKey: { .object($0.id) })
-        addresses = try self.records.decoded(IPAddressRecord.self, recordType: "NettworkIPAddressRecord", expectedResourceKey: { .string($0.id) })
-        vlanGroups = try self.records.decoded(VLANGroup.self, recordType: "NettworkVLANGroup", expectedResourceKey: { .object($0.id) })
-        vlans = try self.records.decoded(VLAN.self, recordType: "NettworkVLAN", expectedResourceKey: { .object($0.id) })
-        interfaces = try self.records.decoded(Interface.self, recordType: "NettworkInterface", expectedResourceKey: { .object($0.id) })
-        assignments = try self.records.decoded(IPAddressAssignment.self, recordType: "NettworkIPAddressAssignment", expectedResourceKey: { .object($0.id) })
+        vrfs = try self.records.decoded(VRF.self, recordType: WorkspaceRecordType.vrf, expectedResourceKey: { .object($0.id) })
+        prefixes = try self.records.decoded(Prefix.self, recordType: WorkspaceRecordType.prefix, expectedResourceKey: { .object($0.id) })
+        addresses = try self.records.decoded(IPAddressRecord.self, recordType: WorkspaceRecordType.ipAddressRecord, expectedResourceKey: { .string($0.id) })
+        vlanGroups = try self.records.decoded(VLANGroup.self, recordType: WorkspaceRecordType.vlanGroup, expectedResourceKey: { .object($0.id) })
+        vlans = try self.records.decoded(VLAN.self, recordType: WorkspaceRecordType.vlan, expectedResourceKey: { .object($0.id) })
+        interfaces = try self.records.decoded(Interface.self, recordType: WorkspaceRecordType.interface, expectedResourceKey: { .object($0.id) })
+        assignments = try self.records.decoded(
+            IPAddressAssignment.self, recordType: WorkspaceRecordType.ipAddressAssignment, expectedResourceKey: { .object($0.id) })
         memberships = try self.records.decoded(
-            InterfaceVLANMembership.self, recordType: "NettworkInterfaceVLANMembership",
+            InterfaceVLANMembership.self, recordType: WorkspaceRecordType.interfaceVLANMembership,
             expectedResourceKey: { .object($0.id) })
         audits = try self.records.decoded(AuditEvent.self, recordType: CloudRecordNaming.auditRecordType, expectedResourceKey: { .object($0.id) })
         workOrders = try self.records.decoded(WorkOrder.self, recordType: CloudRecordNaming.workOrderRecordType, expectedResourceKey: { .object($0.id) })

@@ -103,20 +103,20 @@ extension SwiftDataCloudMirrorStore {
 
     func cloudRecordType(for persistedType: String) -> String {
         switch persistedType {
-        case LocalRecordKind.physicalTopology: return "NettworkPhysicalTopology"
+        case LocalRecordKind.physicalTopology: return WorkspaceRecordType.physicalTopology
         case LocalRecordKind.workOrder: return CloudRecordNaming.workOrderRecordType
         case LocalRecordKind.auditEvent: return CloudRecordNaming.auditRecordType
-        case LocalRecordKind.prefix: return "NettworkPrefix"
+        case LocalRecordKind.prefix: return WorkspaceRecordType.prefix
         default: return persistedType
         }
     }
 
     func persistenceRecordType(for cloudRecordType: String) -> String {
         switch cloudRecordType {
-        case "NettworkPhysicalTopology": LocalRecordKind.physicalTopology
+        case WorkspaceRecordType.physicalTopology: LocalRecordKind.physicalTopology
         case CloudRecordNaming.workOrderRecordType: LocalRecordKind.workOrder
         case CloudRecordNaming.auditRecordType: LocalRecordKind.auditEvent
-        case "NettworkPrefix": LocalRecordKind.prefix
+        case WorkspaceRecordType.prefix: LocalRecordKind.prefix
         default: cloudRecordType
         }
     }

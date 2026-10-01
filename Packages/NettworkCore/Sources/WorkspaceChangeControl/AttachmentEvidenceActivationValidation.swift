@@ -43,7 +43,7 @@ extension AuthoritativeActivationMutationValidator {
         _ mutation: AuthoritativeActivationMutation,
         bindingSave: AuthoritativeRecordSave
     ) throws -> WorkOrder {
-        guard let assertion = mutation.readAssertions.first, assertion.recordType == "NettworkWorkOrder",
+        guard let assertion = mutation.readAssertions.first, assertion.recordType == WorkspaceRecordType.workOrder,
             assertion.schemaVersion == 1,
             let workOrder = try? StableActivationPayloadCoding.decode(WorkOrder.self, from: assertion.encodedRecord),
             (try? StableActivationPayloadCoding.encode(workOrder)) == assertion.encodedRecord,
@@ -123,7 +123,7 @@ extension AuthoritativeActivationMutationValidator {
     ) throws -> AttachmentEvidenceReservationRelease {
         guard
             let releaseSave = businessSaves.first(where: {
-                $0.recordType == "NettworkAttachmentEvidenceReservationRelease"
+                $0.recordType == WorkspaceRecordType.attachmentEvidenceReservationRelease
             }),
             let release = try? StableActivationPayloadCoding.decode(AttachmentEvidenceReservationRelease.self, from: releaseSave.encodedRecord),
             (try? StableActivationPayloadCoding.encode(release)) == releaseSave.encodedRecord,
@@ -143,7 +143,7 @@ extension AuthoritativeActivationMutationValidator {
     ) throws -> AttachmentEvidenceQuotaLedger {
         guard
             let ledgerSave = businessSaves.first(where: {
-                $0.recordType == "NettworkAttachmentEvidenceQuotaLedger"
+                $0.recordType == WorkspaceRecordType.attachmentEvidenceQuotaLedger
             }),
             let ledger = try? StableActivationPayloadCoding.decode(AttachmentEvidenceQuotaLedger.self, from: ledgerSave.encodedRecord),
             (try? StableActivationPayloadCoding.encode(ledger)) == ledgerSave.encodedRecord,
@@ -183,7 +183,7 @@ extension AuthoritativeActivationMutationValidator {
         _ priorLedger: AuthoritativeActivationRecordSnapshot,
         key: ResourceKey
     ) throws -> AttachmentEvidenceQuotaLedger {
-        guard priorLedger.recordType == "NettworkAttachmentEvidenceQuotaLedger",
+        guard priorLedger.recordType == WorkspaceRecordType.attachmentEvidenceQuotaLedger,
             priorLedger.schemaVersion == 1,
             let decoded = try? StableActivationPayloadCoding.decode(AttachmentEvidenceQuotaLedger.self, from: priorLedger.encodedRecord),
             decoded.resourceKey == key
