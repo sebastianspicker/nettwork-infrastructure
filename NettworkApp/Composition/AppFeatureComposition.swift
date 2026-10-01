@@ -29,22 +29,7 @@ struct AppFeatureComposition {
     let cancellationReleaseAuthorization: (CancellationReleaseRequest) -> CancellationReleaseAuthorization?
     let workOrderEvidenceSource: () -> (any OpaqueContentSource)?
     let workOrderEvidenceAuthorization: () -> AuthorizedOperationContext?
-    private let optionalCapabilities: AppFeatureOptionalCapabilities
-
-    var auditExportAuthorization: (() -> AuthorizedOperationContext?)? { optionalCapabilities.auditExportAuthorization }
-    var floorPlanImportSource: (() -> (any OpaqueContentSource)?)? { optionalCapabilities.floorPlanImportSource }
-    var attachmentAuthorization: (() -> AuthorizedOperationContext?)? { optionalCapabilities.attachmentAuthorization }
-    var floorPlanPreviewAuthorization: (() -> AuthorizedOperationContext?)? { optionalCapabilities.floorPlanPreviewAuthorization }
-    var csvImportDocument: (() -> CSVImportDocument?)? { optionalCapabilities.csvImportDocument }
-    var importAuthorization: (() -> AuthorizedOperationContext?)? { optionalCapabilities.importAuthorization }
-    var csvExportAuthorization: (() -> AuthorizedOperationContext?)? { optionalCapabilities.csvExportAuthorization }
-    var csvExportDestination: (any CSVWorkspaceExportDestination)? { optionalCapabilities.csvExportDestination }
-    var archiveExportAuthorization: (() -> AuthorizedOperationContext?)? { optionalCapabilities.archiveExportAuthorization }
-    var archiveRestoreSource: (() -> (any ArchiveEntrySource)?)? { optionalCapabilities.archiveRestoreSource }
-    var archivePackageSource: ((URL) throws -> any ArchiveEntrySource)? { optionalCapabilities.archivePackageSource }
-    var archiveRestoreAuthorization: (() -> AuthorizedOperationContext?)? { optionalCapabilities.archiveRestoreAuthorization }
-    var workspaceShareMetadata: (() -> Data?)? { optionalCapabilities.workspaceShareMetadata }
-    var onWorkspaceInvitationPrepared: ((WorkspaceInviteReceipt) -> Void)? { optionalCapabilities.onWorkspaceInvitationPrepared }
+    let capabilities: AppFeatureOptionalCapabilities
 
     init(
         inventory: InventoryExploreModel,
@@ -64,7 +49,7 @@ struct AppFeatureComposition {
         cancellationReleaseAuthorization: @escaping (CancellationReleaseRequest) -> CancellationReleaseAuthorization?,
         workOrderEvidenceSource: @escaping () -> (any OpaqueContentSource)?,
         workOrderEvidenceAuthorization: @escaping () -> AuthorizedOperationContext?,
-        optionalCapabilities: AppFeatureOptionalCapabilities
+        capabilities: AppFeatureOptionalCapabilities
     ) {
         self.inventory = inventory
         self.topology = topology
@@ -83,28 +68,12 @@ struct AppFeatureComposition {
         self.cancellationReleaseAuthorization = cancellationReleaseAuthorization
         self.workOrderEvidenceSource = workOrderEvidenceSource
         self.workOrderEvidenceAuthorization = workOrderEvidenceAuthorization
-        self.optionalCapabilities = optionalCapabilities
+        self.capabilities = capabilities
     }
 }
 
-@MainActor
-protocol AppFeatureOptionalCapabilitiesProviding {
-    var auditExportAuthorization: (() -> AuthorizedOperationContext?)? { get }
-    var floorPlanImportSource: (() -> (any OpaqueContentSource)?)? { get }
-    var attachmentAuthorization: (() -> AuthorizedOperationContext?)? { get }
-    var floorPlanPreviewAuthorization: (() -> AuthorizedOperationContext?)? { get }
-    var csvImportDocument: (() -> CSVImportDocument?)? { get }
-    var importAuthorization: (() -> AuthorizedOperationContext?)? { get }
-    var csvExportAuthorization: (() -> AuthorizedOperationContext?)? { get }
-    var csvExportDestination: (any CSVWorkspaceExportDestination)? { get }
-    var archiveExportAuthorization: (() -> AuthorizedOperationContext?)? { get }
-    var archiveRestoreSource: (() -> (any ArchiveEntrySource)?)? { get }
-    var archivePackageSource: ((URL) throws -> any ArchiveEntrySource)? { get }
-    var archiveRestoreAuthorization: (() -> AuthorizedOperationContext?)? { get }
-    var workspaceShareMetadata: (() -> Data?)? { get }
-    var onWorkspaceInvitationPrepared: ((WorkspaceInviteReceipt) -> Void)? { get }
-}
-
+/// Organization-supplied capabilities that a screen may lack. A nil member
+/// means the feature is unavailable and its screen hides or disables it.
 @MainActor
 struct AppFeatureOptionalCapabilities {
     let auditExportAuthorization: (() -> AuthorizedOperationContext?)?
@@ -121,23 +90,6 @@ struct AppFeatureOptionalCapabilities {
     let archiveRestoreAuthorization: (() -> AuthorizedOperationContext?)?
     let workspaceShareMetadata: (() -> Data?)?
     let onWorkspaceInvitationPrepared: ((WorkspaceInviteReceipt) -> Void)?
-
-    init(source: any AppFeatureOptionalCapabilitiesProviding) {
-        auditExportAuthorization = source.auditExportAuthorization
-        floorPlanImportSource = source.floorPlanImportSource
-        attachmentAuthorization = source.attachmentAuthorization
-        floorPlanPreviewAuthorization = source.floorPlanPreviewAuthorization
-        csvImportDocument = source.csvImportDocument
-        importAuthorization = source.importAuthorization
-        csvExportAuthorization = source.csvExportAuthorization
-        csvExportDestination = source.csvExportDestination
-        archiveExportAuthorization = source.archiveExportAuthorization
-        archiveRestoreSource = source.archiveRestoreSource
-        archivePackageSource = source.archivePackageSource
-        archiveRestoreAuthorization = source.archiveRestoreAuthorization
-        workspaceShareMetadata = source.workspaceShareMetadata
-        onWorkspaceInvitationPrepared = source.onWorkspaceInvitationPrepared
-    }
 }
 
 @MainActor
@@ -259,14 +211,14 @@ private struct AppFeatureDestinationFactory {
                 OperationsScreen(
                     model: composition.operations,
                     mode: section == .reports ? .reports : .audit,
-                    exportAuthorization: composition.auditExportAuthorization
+                    exportAuthorization: composition.capabilities.auditExportAuthorization
                 ))
         case .administration:
             return AnyView(
                 AdministrationScreen(
                     model: composition.administration,
-                    shareMetadata: composition.workspaceShareMetadata,
-                    onInvitationPrepared: composition.onWorkspaceInvitationPrepared
+                    shareMetadata: composition.capabilities.workspaceShareMetadata,
+                    onInvitationPrepared: composition.capabilities.onWorkspaceInvitationPrepared
                 ))
         default:
             return unavailableDestination(for: section)
@@ -278,9 +230,9 @@ private struct AppFeatureDestinationFactory {
             FloorPlansScreen(
                 model: composition.floorPlans,
                 authorization: composition.operationsAuthorization,
-                importSource: composition.floorPlanImportSource,
-                attachmentAuthorization: composition.attachmentAuthorization,
-                previewAuthorization: composition.floorPlanPreviewAuthorization,
+                importSource: composition.capabilities.floorPlanImportSource,
+                attachmentAuthorization: composition.capabilities.attachmentAuthorization,
+                previewAuthorization: composition.capabilities.floorPlanPreviewAuthorization,
                 objectDestination: objectDestination,
                 inventory: composition.inventory
             ))
@@ -301,14 +253,14 @@ private struct AppFeatureDestinationFactory {
         AnyView(
             TransferScreen(
                 model: composition.transfer,
-                importDocument: composition.csvImportDocument,
-                importAuthorization: composition.importAuthorization,
-                csvExportAuthorization: composition.csvExportAuthorization,
-                csvExportDestination: composition.csvExportDestination,
-                exportAuthorization: composition.archiveExportAuthorization,
-                restoreSource: composition.archiveRestoreSource,
-                archivePackageSource: composition.archivePackageSource,
-                restoreAuthorization: composition.archiveRestoreAuthorization
+                importDocument: composition.capabilities.csvImportDocument,
+                importAuthorization: composition.capabilities.importAuthorization,
+                csvExportAuthorization: composition.capabilities.csvExportAuthorization,
+                csvExportDestination: composition.capabilities.csvExportDestination,
+                exportAuthorization: composition.capabilities.archiveExportAuthorization,
+                restoreSource: composition.capabilities.archiveRestoreSource,
+                archivePackageSource: composition.capabilities.archivePackageSource,
+                restoreAuthorization: composition.capabilities.archiveRestoreAuthorization
             ))
     }
 

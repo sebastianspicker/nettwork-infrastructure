@@ -49,7 +49,9 @@ reachable by its configured runtime class name. It is an application composition
 extension point, not a dynamically downloaded plugin or an environment-variable
 configuration object. The protocol and assembly input are internal app types;
 an organization build must add its provider to the app target rather than
-expecting a standalone binary package to configure Nettwork.
+expecting a standalone binary package to configure Nettwork. The policy values
+and service protocols that the input carries come from the `WorkspaceServices`
+package product, so provider source imports it.
 
 An absent provider is a supported unconfigured state. A blank/malformed value,
 unresolvable class, invalid organization input, or startup failure produces a
@@ -58,8 +60,8 @@ visible failure and no production feature graph.
 ## Required organization input
 
 The complete source contract is
-`NettworkApp/Infrastructure/ProductionRuntimeAssemblyInput.swift`. It groups the
-required inputs as follows:
+`NettworkApp/Composition/Runtime/ProductionRuntimeAssemblyInput.swift`. It
+groups the required inputs as follows:
 
 | Group | Required responsibilities |
 | --- | --- |
@@ -70,9 +72,11 @@ required inputs as follows:
 | Feature context | Initial floor/anchor context; template and operations policy; live authorization providers; transfer sources/destinations; workspace share callbacks |
 | Platform capability override | Optional complete replacement for system QR capture and PDF label generation/export/printing adapters |
 
-Assembly validation rejects invalid core identity, bounds, quotas, and operation
-policy values. Storage URLs must be file URLs and the organization-provided
-directories must be distinct. These checks validate shape and safety invariants;
+Assembly validation
+(`NettworkApp/Composition/Runtime/ProductionRuntimeAssemblyValidation.swift`)
+rejects invalid core identity, bounds, quotas, and operation policy values.
+Storage URLs must be file URLs and the organization-provided directories must
+be distinct. These checks validate shape and safety invariants;
 they do not prove that remote service configuration, permissions, or filesystem
 protection are operational.
 

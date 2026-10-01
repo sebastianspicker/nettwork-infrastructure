@@ -137,8 +137,8 @@ workspace.
 | Path | Contents |
 | --- | --- |
 | `NettworkApp/` | SwiftUI screens, app composition, and Apple-platform adapters |
-| `Packages/NettworkCore/` | Six Swift libraries for the model, changes, persistence, sync, content safety, and transfer |
-| `Tests/App/` | App composition and platform-adapter tests |
+| `Packages/NettworkCore/` | Swift libraries for the model, changes, persistence, sync, content safety, transfer, feature contracts, and production workspace services |
+| `Tests/App/` | Feature view-model, composition, routing, and platform-adapter tests |
 | `site/` | Static browser demo and sample data |
 | `Design/Brand/` | Master icon, palette, and asset generation rules |
 | `scripts/` | Validation, icon generation, and benchmark tools |

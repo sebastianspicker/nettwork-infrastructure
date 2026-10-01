@@ -45,6 +45,8 @@ targetTemplates:
         product: ImportExport
       - package: NettworkCore
         product: FeatureContracts
+      - package: NettworkCore
+        product: WorkspaceServices
 
   NettworkAppTests:
     type: bundle.unit-test

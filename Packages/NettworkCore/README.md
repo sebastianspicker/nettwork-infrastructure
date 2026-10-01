@@ -26,6 +26,7 @@ The package declares no third-party package dependencies.
 | `ContentSafety` | Bounded attachment decoding, sanitization, hashing, private staging, quota, and evidence binding | `NetworkModel`, `WorkspaceChangeControl` |
 | `ImportExport` | Exact CSV/archive formats, bounded parsing, staging, verification, approval, export, and restore | `NetworkModel`, `WorkspaceChangeControl`, `ContentSafety` |
 | `FeatureContracts` | UI-facing feature service protocols and their snapshot, request, and error values | `NetworkModel`, `WorkspaceChangeControl`, `ContentSafety`, `ImportExport` |
+| `WorkspaceServices` | Production implementations of the feature contracts: session authorization, work-order mutation, SwiftData read adapters, evidence, transfer, sync state, and audit export | `NetworkModel`, `WorkspaceChangeControl`, `Persistence`, `CloudSync`, `ContentSafety`, `ImportExport`, `FeatureContracts` |
 
 The manifest and `scripts/check-architecture.sh` enforce this dependency
 direction. See [the architecture guide](../../docs/ARCHITECTURE.md) for the app
@@ -46,6 +47,8 @@ Use the narrowest product that owns the required behavior:
 - Add `ImportExport` for CSV/archive formats and staged workspace transfer.
 - Add `FeatureContracts` for the protocols and values shared by app screens and
   the services that back them.
+- Add `WorkspaceServices` only from app composition, which assembles the
+  production services; screens depend on `FeatureContracts` instead.
 
 `CloudSync` provides transport and synchronization contracts but does not choose
 an organization CloudKit container, account, share policy, schema deployment,
@@ -78,7 +81,6 @@ semantics as compatibility boundaries.
 From the repository root:
 
 ```sh
-make check-package
 make check-architecture
 make verify-package
 ```

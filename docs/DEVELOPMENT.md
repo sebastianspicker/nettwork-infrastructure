@@ -70,7 +70,7 @@ Run commands from the repository root unless stated otherwise.
 | `make verify-package` | Complete `NettworkCore` Swift package tests with compiler warnings treated as errors |
 | `make verify-native` | Generates the Xcode project, tests the macOS app bundle, and builds the iOS Simulator app without signing |
 | `make benchmark` | Release measurements with fixed fixtures; no wall-clock pass/fail thresholds |
-| `make check-architecture` | Exact package dependencies, and forbidden imports; requires `rg`, `swift`, and `ruby` |
+| `make check-architecture` | Exact package dependencies, forbidden imports per layer, and no Platform type names in Presentation; requires `rg`, `swift`, and `ruby` |
 | `make check-quality` | Authored-source physical limits plus Swift callable length, complexity, and exact-clone checks |
 | `make check-assets` | Asset JSON, references, dimensions, opacity, required colors, and target settings |
 | `make lint-docs` | Locked Markdown linting for root and package documentation |
@@ -200,11 +200,17 @@ is not a native app capture.
 
 - Add reusable model and service behavior to the narrowest `NettworkCore`
   product. Preserve the dependency graph in [ARCHITECTURE.md](ARCHITECTURE.md).
-- Keep SwiftUI feature state and UI-facing contracts in Presentation. It may
-  present file import/export UI, but file and platform adapters belong in
-  Infrastructure.
-- Keep production assembly, SwiftData/CloudKit wiring, authorization derivation,
-  filesystem work, and Apple-platform bridges in Infrastructure.
+- Put a protocol or value type that Presentation consumes and a service
+  implements in `FeatureContracts`; keep view models, views, and view state in
+  `NettworkApp/Presentation`.
+- Put production service behavior (authorization derivation, SwiftData reads,
+  work-order mutation, transfer, evidence binding) in `WorkspaceServices` and
+  cover it with `swift test` in `WorkspaceServicesTests`.
+- Put adapters that need UIKit, AppKit, VisionKit, printing, the pasteboard, or
+  user-selected files in `NettworkApp/Platform`, behind a `FeatureContracts`
+  port.
+- Put production assembly, organization input, and CloudKit wiring in
+  `NettworkApp/Composition/Runtime`; it is the only place that sees every layer.
 - Update `project.yml`, not the generated Xcode project, for target changes.
 - Replace `Design/Brand/NettworkIconMaster.png` only through the process in the
   [brand guide](../Design/Brand/README.md), then regenerate and validate icons.

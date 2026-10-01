@@ -20,7 +20,7 @@ placeholder workspace.
 ```mermaid
 flowchart LR
     Operator[Operator] --> App[Nettwork iOS or macOS app]
-    App --> Platform[Camera, Files, PDF, printing, and OSLog adapters]
+    App --> Platform[Camera, Files, PDF label, printing, and pasteboard adapters]
     App --> Local[(SwiftData mirror, outbox, and private files)]
     App --> Cloud[(Organization CloudKit container)]
     Demo[Static site demo] --> Mock[Bundled mock data]
@@ -31,7 +31,7 @@ services with the native app.
 
 ## Components and dependency direction
 
-`NettworkCore` contains seven Swift library products. Arrows below point from a
+`NettworkCore` contains eight Swift library products. Arrows below point from a
 module to a dependency:
 
 ```mermaid
@@ -51,6 +51,11 @@ flowchart TD
     Contracts --> ContentSafety
     Contracts --> WCC
     Contracts --> Model
+    Services[WorkspaceServices] --> Contracts
+    Services --> CloudSync
+    Services --> Persistence
+    Services --> ImportExport
+    Services --> ContentSafety
 
     Presentation[NettworkApp Presentation] --> Model
     Presentation --> WCC
@@ -58,19 +63,22 @@ flowchart TD
     Presentation --> ImportExport
     Presentation --> Contracts
     Composition[NettworkApp Composition] --> Presentation
-    Infrastructure[NettworkApp Infrastructure] --> CloudSync
-    Infrastructure --> Persistence
-    Infrastructure --> ContentSafety
-    Infrastructure --> ImportExport
-    Infrastructure --> Contracts
+    Composition --> Services
+    Composition --> AppPlatform[NettworkApp Platform]
+    AppPlatform --> Contracts
+    AppPlatform --> ImportExport
 ```
 
 The exact package graph is declared in `Packages/NettworkCore/Package.swift`
 and enforced by `scripts/check-architecture.sh`. The same check keeps
 `NetworkModel` independent of change-control and infrastructure modules and
-forbids Presentation from importing CloudKit, SwiftData, `Persistence`, or
-`CloudSync`; `FeatureContracts` additionally may not import SwiftUI, UIKit, or
-AppKit.
+forbids Presentation from importing CloudKit, SwiftData, `Persistence`,
+`CloudSync`, or `WorkspaceServices`; `FeatureContracts` additionally may not
+import SwiftUI, UIKit, or AppKit, and `WorkspaceServices` may not import
+SwiftUI, UIKit, AppKit, or CloudKit. `NettworkApp/Platform` may not import
+SwiftData, CloudKit, `Persistence`, `CloudSync`, or `WorkspaceServices`. Because Platform and
+Presentation share the app module, the script also fails if Presentation names
+a type declared in Platform.
 
 | Component | Responsibility |
 | --- | --- |
@@ -80,10 +88,11 @@ AppKit.
 | `CloudSync` | CloudKit transport contracts, remote validation, conditional atomic writes, receipt recovery, staged transfer, sessions, and foreground synchronization |
 | `ContentSafety` | Bounded attachment decoding, allowlisting, sanitization, hashing, private staging, quotas, and evidence binding |
 | `ImportExport` | Exact CSV schemas, archive formats, bounded parsing, verification, staged transfer, approval, export, and restore |
-| `FeatureContracts` | UI-facing service protocols and the snapshot, request, and error values that Presentation consumes and Infrastructure implements |
-| `NettworkApp/Presentation` | SwiftUI shell, screens, feature models, view state, and document presentation |
-| `NettworkApp/Infrastructure` | Production graph, organization authorities, SwiftData and CloudKit adapters, file operations, and platform bridges |
-| `NettworkApp/Composition` | App entry point, feature registry, dependency injection, routing, startup, and shutdown |
+| `FeatureContracts` | UI-facing service protocols and the snapshot, request, and error values that Presentation consumes and WorkspaceServices implements |
+| `WorkspaceServices` | Production feature services: session authorization, organization authorities, work-order mutation and planning, SwiftData read adapters and mirror projection, attachment and floor-plan evidence (including bounded PDF inspection and preview decoding), workspace transfer, sync state stores, OSLog sync telemetry, and audit export |
+| `NettworkApp/Presentation` | SwiftUI shell, navigation state and `nettwork://` route parsing (`Shell/Navigation.swift`), screens, feature models, view state, and document presentation |
+| `NettworkApp/Platform` | Apple-platform adapters behind FeatureContracts ports: camera capture, user-selected files and archive packages, PDF labels and printing, and pasteboard |
+| `NettworkApp/Composition` | App entry point, feature registry and optional feature capabilities, dependency injection, bootstrap, startup, and shutdown; `Composition/Runtime` assembles the production graph from organization input and CloudKit, one file per graph (foundation, cloud, attachment, transfer, organization authorities, floor plan, feature input) plus assembly validation |
 
 ## How the app starts
 
@@ -163,7 +172,7 @@ all containing prefixes. The index is transient and changes no stored schema.
 ### Controlled mutations and work orders
 
 Presentation submits intent through feature contracts; it never grants
-authority. Infrastructure derives current authority from the verified Cloud
+authority. WorkspaceServices derives current authority from the verified Cloud
 session, actor, installation session, workspace lease, and organization policy,
 then checks any presentation values for an exact match.
 
@@ -256,7 +265,7 @@ prove authenticity against a malicious archive writer.
 ## Build and deployment boundaries
 
 `project.yml` is the source of truth for the generated Xcode project. The iOS
-and macOS targets compile the same app source and all seven package products, with
+and macOS targets compile the same app source and all eight package products, with
 platform-specific entitlements and unit-test bundles. `Nettwork.xcodeproj`,
 SwiftPM `.build`, DerivedData, test results, and coverage output are generated.
 
@@ -277,8 +286,10 @@ and deploys only `site/`.
 | Attachment admission, decoding, sanitization, or evidence binding | `Packages/NettworkCore/Sources/ContentSafety` |
 | CSV/archive format or staged transfer workflow | `Packages/NettworkCore/Sources/ImportExport` |
 | Feature service protocol, snapshot, or request type shared by screens and services | `Packages/NettworkCore/Sources/FeatureContracts` |
+| Production feature service, authority, SwiftData read adapter, or transfer workflow | `Packages/NettworkCore/Sources/WorkspaceServices` |
 | Screen, feature model, or SwiftUI document-picker presentation | `NettworkApp/Presentation` |
-| Production composition, file/document adapter, or Apple-platform bridge | `NettworkApp/Infrastructure` |
+| Production runtime assembly, organization input, or CloudKit wiring | `NettworkApp/Composition/Runtime` |
+| File/document adapter or Apple-platform bridge | `NettworkApp/Platform` |
 
 Add new organization-specific implementations through the production assembly
 input and existing feature/platform protocols. Keep organization identities and

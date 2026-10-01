@@ -5,6 +5,7 @@ import WorkspaceChangeControl
 import XCTest
 
 @testable import Nettwork
+@testable import WorkspaceServices
 
 final class InventoryHistoryBatchTests: XCTestCase {
     func testInventoryTraceSummaryPreservesCompleteWordingAndMarksPartialResults() {
