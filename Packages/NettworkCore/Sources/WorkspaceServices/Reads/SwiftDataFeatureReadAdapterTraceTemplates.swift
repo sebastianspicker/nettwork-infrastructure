@@ -124,6 +124,7 @@ extension SwiftDataFeatureReadAdapter {
     }
 
     private static func migrationPlan(for device: Device, target: DeviceType, topology: PhysicalTopology) throws -> DeviceTemplateMigrationPlan {
+        try TemplateCatalog.validate(deviceTemplate: target)
         let sourceIDs = Set(device.templateSnapshot?.portTemplates.map(\.id) ?? [])
         let newPortIDs = Dictionary(
             uniqueKeysWithValues: target.portTemplates.compactMap { template -> (ObjectID, ObjectID)? in

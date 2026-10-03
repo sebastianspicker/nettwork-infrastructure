@@ -10,6 +10,11 @@ extension ProductionWorkspaceTransferAuthority {
         guard namespace == account.namespace else { throw ProductionWorkspaceTransferAuthorityError.namespaceMismatch }
         let trusted = try await sessionAuthorizer.verifiedSession(namespace: namespace)
         guard trusted.account == account else { throw ProductionWorkspaceTransferAuthorityError.namespaceMismatch }
+        try OfficialClientPolicy.authorizeMutation(
+            actor: trusted.actor,
+            account: trusted.account,
+            requiresAdministrator: true
+        )
         return trusted
     }
     func bootstrapSentinel(in namespace: PersistenceNamespace) async throws -> (snapshot: CloudExactRecordSnapshot, workspace: CloudWorkspaceRecord) {

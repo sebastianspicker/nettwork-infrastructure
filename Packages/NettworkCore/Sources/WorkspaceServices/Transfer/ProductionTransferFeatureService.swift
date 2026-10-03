@@ -98,6 +98,10 @@ public struct ProductionTransferFeatureService: TransferFeatureService {
         }
     }
 
+    public func validateArchiveExportAuthorization(_ authorization: AuthorizedOperationContext) async throws {
+        try await archiveExport.validateAuthorization(authorization)
+    }
+
     public func verifyArchive(
         _ source: any ArchiveEntrySource, authorization: AuthorizedOperationContext
     ) async throws -> FileBackedArchiveRestorePreview {

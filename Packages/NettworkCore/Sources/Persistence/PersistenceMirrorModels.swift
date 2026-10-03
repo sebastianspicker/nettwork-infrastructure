@@ -181,7 +181,7 @@ public final class LocalInventoryProjectionEdgeModel {
 /// incremental update.
 @Model
 public final class LocalInventoryProjectionStateModel {
-    public static let currentSchemaVersion = 8
+    public static let currentSchemaVersion = 9
     @Attribute(.unique) public var namespaceKey: String
     public var schemaVersion: Int
     public var isComplete: Bool

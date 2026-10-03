@@ -6,4 +6,10 @@ public struct ArchiveExportDocument: Sendable {
     public let manifest: ArchiveManifest
     public let completionMarker: ArchiveCompletionMarker
     public let entries: [String: Data]
+
+    public init(manifest: ArchiveManifest, completionMarker: ArchiveCompletionMarker, entries: [String: Data]) {
+        self.manifest = manifest
+        self.completionMarker = completionMarker
+        self.entries = entries
+    }
 }

@@ -57,7 +57,11 @@ extension SwiftDataPersistenceStore {
                 .map { ($0.resourceKey.description, $0) }, uniquingKeysWith: { current, _ in current })
         var nodeDelta = 0
         for record in changedRecords where !record.isTombstone {
-            replacementNodes[record.resourceKey.description] = record
+            if try isVisibleToFeatureProjection(record, in: namespace) {
+                replacementNodes[record.resourceKey.description] = record
+            } else {
+                replacementNodes.removeValue(forKey: record.resourceKey.description)
+            }
         }
         let storageKeys = derivedNodeKeys.map { inventoryProjectionNodeStorageKey($0, in: namespace) }
         let existingNodes = Dictionary(

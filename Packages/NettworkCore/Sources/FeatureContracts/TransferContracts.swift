@@ -8,6 +8,7 @@ public protocol TransferFeatureService {
     func dryRunCSV(_ source: any CSVImportSource, authorization: AuthorizedOperationContext) async throws -> ImportPlan
     func activateCSV(_ plan: ImportPlan, source: any CSVImportSource, authorization: AuthorizedOperationContext) async throws
     func exportArchive(authorization: AuthorizedOperationContext) async throws -> ArchiveExportDocument
+    func validateArchiveExportAuthorization(_ authorization: AuthorizedOperationContext) async throws
     func verifyArchive(
         _ source: any ArchiveEntrySource, authorization: AuthorizedOperationContext
     ) async throws -> FileBackedArchiveRestorePreview

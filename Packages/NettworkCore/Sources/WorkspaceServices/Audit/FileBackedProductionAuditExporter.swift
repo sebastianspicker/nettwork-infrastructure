@@ -68,6 +68,7 @@ public actor FileBackedProductionAuditExporter: ProductionImmutableAuditExportin
         let operationID: ObjectID
         let namespace: PersistenceNamespace
         let privateURL: URL
+        let destinationURL: URL
     }
 
     private let account: AccountContext
@@ -86,6 +87,7 @@ public actor FileBackedProductionAuditExporter: ProductionImmutableAuditExportin
     public func prepareAudit(operationID: ObjectID, in namespace: PersistenceNamespace) async throws -> ProductionStagedAuditExport {
         try requireNamespace(namespace)
         try preparePrivateRoot()
+        let destinationURL = try await destination.destination(for: operationID, namespace: namespace).standardizedFileURL
         let records = try await persistence.mirroredRecords(in: namespace)
         let events =
             try records
@@ -122,7 +124,13 @@ public actor FileBackedProductionAuditExporter: ProductionImmutableAuditExportin
             [.posixPermissions: NSNumber(value: 0o600)],
             ofItemAtPath: url.path
         )
-        entries[capability.capabilityID] = Entry(capability: capability, operationID: operationID, namespace: namespace, privateURL: url)
+        entries[capability.capabilityID] = Entry(
+            capability: capability,
+            operationID: operationID,
+            namespace: namespace,
+            privateURL: url,
+            destinationURL: destinationURL
+        )
         return capability
     }
 
@@ -134,8 +142,7 @@ public actor FileBackedProductionAuditExporter: ProductionImmutableAuditExportin
         else {
             throw ProductionAuditExportError.unknownCapability
         }
-        let selectedDestination = try await destination.destination(for: entry.operationID, namespace: namespace)
-        let finalURL = selectedDestination.standardizedFileURL
+        let finalURL = entry.destinationURL
         let parent = finalURL.deletingLastPathComponent()
         let parentValues = try parent.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
         guard parentValues.isDirectory == true,

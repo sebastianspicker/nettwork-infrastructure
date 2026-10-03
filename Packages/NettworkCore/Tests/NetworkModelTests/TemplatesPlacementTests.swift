@@ -86,6 +86,22 @@ final class TemplatesPlacementTests: XCTestCase {
         try state.validate()
     }
 
+    func testExtremeRackCoordinatesAreCheckedWithoutOverflow() throws {
+        let rack = Rack(assetCode: "R-MAX", locationID: id(80), heightRU: Int.max)
+        XCTAssertNoThrow(
+            try DefaultTopologyEngine.validate(
+                RackPlacement(deviceID: id(81), rackID: rack.id, startRU: Int.max, heightRU: 1, face: .front),
+                in: rack
+            )
+        )
+        XCTAssertThrowsError(
+            try DefaultTopologyEngine.validate(
+                RackPlacement(deviceID: id(82), rackID: rack.id, startRU: Int.max, heightRU: 2, face: .front),
+                in: rack
+            )
+        )
+    }
+
     func testInstallCommandPreservesModulesAndRejectsCrossDeviceModulePorts() throws {
         let type = DeviceType(id: id(70), name: "Modular", kind: .switchDevice)
         let device = Device(id: id(71), assetCode: "SW-71", name: "Switch", typeID: type.id)
@@ -119,6 +135,44 @@ final class TemplatesPlacementTests: XCTestCase {
         var wrongFloorState = TemplatePlacementState(
             hierarchy: hierarchy, topology: state.topology, placements: state.placements, rackReservations: state.rackReservations)
         XCTAssertThrowsError(try wrongFloorState.addAnchor(FloorPlanAnchor(id: id(54), objectID: fixture.rackID, floorID: secondFloor.id, x: 0.5, y: 0.5)))
+    }
+
+    func testFloorPlanAnchorDecoderRejectsOutOfRangeCoordinates() throws {
+        let anchor = FloorPlanAnchor(id: id(83), objectID: id(84), floorID: id(85), x: 0, y: 1)
+        let encoded = try JSONEncoder().encode(anchor)
+        XCTAssertEqual(try JSONDecoder().decode(FloorPlanAnchor.self, from: encoded), anchor)
+
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object["x"] = 1e100
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(
+                FloorPlanAnchor.self,
+                from: JSONSerialization.data(withJSONObject: object)
+            )
+        )
+    }
+
+    func testMigrationRejectsDuplicateSourceSnapshotPortsWithoutTrapping() throws {
+        let port = PortTemplate(id: id(86), name: "Gi1", medium: .copper, connector: .rj45, order: 1)
+        let source = DeviceType(id: id(87), name: "Source", kind: .switchDevice, portTemplates: [port])
+        var device = Device(id: id(88), assetCode: "SW-88", name: "Switch", typeID: source.id)
+        var snapshot = DeviceTemplateSnapshot(template: source)
+        snapshot.portTemplates.append(port)
+        device.templateSnapshot = snapshot
+        var target = source
+        target.version = 2
+
+        XCTAssertThrowsError(
+            try TemplateMigration.plan(
+                device: device,
+                installedPorts: [],
+                cables: [],
+                target: target,
+                newPortIDs: [:]
+            )
+        ) { error in
+            XCTAssertEqual(error as? TemplateValidationError, .duplicatePortTemplate(port.id))
+        }
     }
 
     private func placementFixture() -> (

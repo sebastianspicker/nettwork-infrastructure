@@ -72,6 +72,61 @@ final class ProductionFeatureMutationAuthorityLifecycleCharacterizationTests: XC
         await assertNothingCommitted(harness)
     }
 
+    func testCompletionRequiresTheCurrentReservationOwnerAndFreshAcknowledgement() async throws {
+        let ownerHarness = try await MutationAuthorityHarness.make(role: .technician)
+        let draft = ownerHarness.singleResourceDraft()
+        try await ownerHarness.seedReservedOrder(
+            draft, status: .executing, reservationOwnerID: "different-owner")
+
+        await assertThrows(WorkOrderTransitionError.cloudKitAcknowledgementMismatch) {
+            try await ownerHarness.authority.complete(
+                workOrderID: draft.id,
+                evidence: [],
+                authorization: ownerHarness.presentation,
+                in: ownerHarness.namespace
+            )
+        }
+        await assertNothingCommitted(ownerHarness)
+
+        let expiredHarness = try await MutationAuthorityHarness.make(role: .technician)
+        let expiredDraft = expiredHarness.singleResourceDraft()
+        try await expiredHarness.seedReservedOrder(
+            expiredDraft,
+            status: .executing,
+            expiresAt: ServiceFixture.epoch.addingTimeInterval(1)
+        )
+        await assertThrows(WorkOrderTransitionError.cloudKitAcknowledgementExpired) {
+            try await expiredHarness.authority.complete(
+                workOrderID: expiredDraft.id,
+                evidence: [],
+                authorization: expiredHarness.presentation,
+                in: expiredHarness.namespace
+            )
+        }
+        await assertNothingCommitted(expiredHarness)
+    }
+
+    func testCompletionRefreshesAcknowledgementExpiryAfterMaterialization() async throws {
+        let harness = try await MutationAuthorityHarness.make(role: .technician)
+        let draft = harness.singleResourceDraft()
+        try await harness.seedReservedOrder(
+            draft,
+            status: .executing,
+            expiresAt: Date.now.addingTimeInterval(0.15)
+        )
+        await harness.materializer.setDelayNanoseconds(300_000_000)
+
+        await assertThrows(WorkOrderTransitionError.cloudKitAcknowledgementExpired) {
+            try await harness.authority.complete(
+                workOrderID: draft.id,
+                evidence: [],
+                authorization: harness.presentation,
+                in: harness.namespace
+            )
+        }
+        await assertNothingCommitted(harness)
+    }
+
     func testRequestCancellationRequiresAnActiveReservation() async throws {
         let harness = try await MutationAuthorityHarness.make()
         let draft = harness.singleResourceDraft()
@@ -80,6 +135,24 @@ final class ProductionFeatureMutationAuthorityLifecycleCharacterizationTests: XC
         await assertThrows(ProductionFeatureMutationAuthorityError.invalidCancellationRequestState) {
             try await harness.authority.requestCancellation(
                 workOrderID: draft.id, reason: "Again", physicalStatus: .notStarted, authorization: harness.presentation, in: harness.namespace)
+        }
+        await assertNothingCommitted(harness)
+    }
+
+    func testRequestCancellationRejectsANonOwnerBeforeCommit() async throws {
+        let harness = try await MutationAuthorityHarness.make(role: .technician)
+        let draft = harness.singleResourceDraft()
+        try await harness.seedReservedOrder(
+            draft, status: .approved, reservationOwnerID: "different-owner")
+
+        await assertThrows(ProductionFeatureMutationAuthorityError.cancellationNotRequested) {
+            try await harness.authority.requestCancellation(
+                workOrderID: draft.id,
+                reason: "Not mine",
+                physicalStatus: .notStarted,
+                authorization: harness.presentation,
+                in: harness.namespace
+            )
         }
         await assertNothingCommitted(harness)
     }

@@ -189,10 +189,10 @@ public struct TemplatePlacementState: Codable, Hashable, Sendable {
 
     private func validateOverlaps(liveRacks: [ObjectID: Rack]) throws {
         var elevations = placements.map {
-            RackElevation(rackID: $0.rackID, face: $0.face, startRU: $0.startRU, endRU: $0.startRU + $0.heightRU - 1, id: $0.deviceID)
+            RackElevation(rackID: $0.rackID, face: $0.face, startRU: $0.startRU, endRU: $0.startRU + ($0.heightRU - 1), id: $0.deviceID)
         }
         elevations += rackReservations.map {
-            RackElevation(rackID: $0.rackID, face: $0.face, startRU: $0.startRU, endRU: $0.startRU + $0.heightRU - 1, id: $0.id)
+            RackElevation(rackID: $0.rackID, face: $0.face, startRU: $0.startRU, endRU: $0.startRU + ($0.heightRU - 1), id: $0.id)
         }
         var furthestByElevation: [String: RackElevation] = [:]
         for current in elevations.sorted() {

@@ -106,6 +106,10 @@ extension SwiftDataPersistenceStore {
         _ changedRecords: [LocalMirrorRecord],
         snapshot: InventoryProjectionSnapshot, in namespace: PersistenceNamespace
     ) throws {
+        let visibleChangedRecords = try changedRecords.filter {
+            if $0.isTombstone { return false }
+            return try isVisibleToFeatureProjection($0, in: namespace)
+        }
         var dirtyKeys = snapshot.oldClosure
         let seeds = try InventorySearchIndexBuilder.directDependencySeeds(changedRecords)
         dirtyKeys.formUnion(changedRecords.map { $0.resourceKey.description })
@@ -119,7 +123,7 @@ extension SwiftDataPersistenceStore {
             from: dirtyKeys.union(seeds.context.map(\.description)), in: namespace)
         var records = try inventoryProjectionRecords(keys: renderKeys, namespace: namespace)
         records.removeAll { record in changedRecords.contains { $0.resourceKey == record.resourceKey } }
-        records.append(contentsOf: changedRecords.filter { !$0.isTombstone })
+        records.append(contentsOf: visibleChangedRecords)
         let preliminary = try InventorySearchIndexBuilder.materialize(records: records, namespace: namespace)
         let newDirtySeeds = Set(changedRecords.map { $0.resourceKey.description })
             .union(seeds.dirty.map(\.description))
@@ -136,7 +140,7 @@ extension SwiftDataPersistenceStore {
             in: namespace)
         records = try inventoryProjectionRecords(keys: renderKeys, namespace: namespace)
         records.removeAll { record in changedRecords.contains { $0.resourceKey == record.resourceKey } }
-        records.append(contentsOf: changedRecords.filter { !$0.isTombstone })
+        records.append(contentsOf: visibleChangedRecords)
         let materialization = try InventorySearchIndexBuilder.materialize(records: records, namespace: namespace)
         guard materialization.entries.count <= InventorySearchIndexBuilder.maximumIncrementalMutations else {
             try rebuildInventorySearchIndexLocked(in: namespace)

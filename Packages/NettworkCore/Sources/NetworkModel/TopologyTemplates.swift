@@ -215,4 +215,26 @@ public struct FloorPlanAnchor: Identifiable, Codable, Hashable, Sendable {
         self.x = x
         self.y = y
     }
+
+    private enum CodingKeys: String, CodingKey { case id, objectID, floorID, x, y }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let x = try container.decode(Double.self, forKey: .x)
+        let y = try container.decode(Double.self, forKey: .y)
+        guard x.isFinite, y.isFinite, (0...1).contains(x), (0...1).contains(y) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .x,
+                in: container,
+                debugDescription: "Floor-plan anchor coordinates must be finite unit values."
+            )
+        }
+        self.init(
+            id: try container.decode(ObjectID.self, forKey: .id),
+            objectID: try container.decode(ObjectID.self, forKey: .objectID),
+            floorID: try container.decode(ObjectID.self, forKey: .floorID),
+            x: x,
+            y: y
+        )
+    }
 }

@@ -153,6 +153,49 @@ final class InventorySearchIndexMaintenanceBehaviorTests: XCTestCase {
         XCTAssertEqual(incrementalRecords, fullRecords)
     }
 
+    func testIncrementalProjectionDoesNotPublishStagedRecordBeforeActivation() async throws {
+        let namespace = makeNamespace()
+        let store = try makeStore()
+        _ = await store.activateLease(for: namespace)
+        try await store.repairMirrorMaintenanceIndexes(
+            records: [], maintenance: LocalMirrorMaintenanceBatch(records: []), in: namespace)
+
+        let activeTransferID = ObjectID()
+        let typeID = ObjectID()
+        let active = LocalWorkspaceVisibilityState(
+            namespace: namespace,
+            lifecycle: .active(
+                commit: .init(
+                    transferID: activeTransferID, memberCount: 1,
+                    rollingDigest: "active-projection")))
+        try await store.applyVerifiedMirrorBatch(
+            batch(records: [try deviceTypeRecord(id: typeID, namespace: namespace)], visibility: active),
+            in: namespace)
+
+        let stagedTransferID = ObjectID()
+        let staged = try deviceRecord(
+            id: ObjectID(), name: "Unactivated Secret", typeID: typeID, revision: 2,
+            namespace: namespace, visibility: .staged(transferID: stagedTransferID))
+        let stagedMaintenance = LocalMirrorMaintenanceBatch(
+            records: [
+                LocalMirrorMaintenanceRecord(
+                    resourceKey: staged.resourceKey,
+                    transferMember: LocalMirrorTransferMember(
+                        transferID: stagedTransferID, resourceKey: staged.resourceKey,
+                        digest: "staged-projection"))
+            ])
+        try await store.applyVerifiedMirrorBatch(
+            LocalMirrorBatch(records: [staged], maintenance: stagedMaintenance),
+            in: namespace)
+
+        let searchRecords = try await store.inventorySearchRecords(
+            in: namespace, kinds: ["device"], siteID: nil, text: "Secret", limit: 50)
+        let projection = try await store.testInventoryProjectionDigest(in: namespace)
+
+        XCTAssertTrue(searchRecords.isEmpty)
+        XCTAssertFalse(projection.nodes.contains { $0.contains(staged.resourceKey.description) })
+    }
+
     private func makeNamespace() -> PersistenceNamespace {
         let workspaceID = ObjectID()
         return PersistenceNamespace(
@@ -180,7 +223,7 @@ final class InventorySearchIndexMaintenanceBehaviorTests: XCTestCase {
 
     private func deviceRecord(
         id: ObjectID, name: String, typeID: ObjectID, revision: TimeInterval,
-        namespace: PersistenceNamespace
+        namespace: PersistenceNamespace, visibility: WorkspaceRecordVisibility = .live
     ) throws -> LocalMirrorRecord {
         let device = Device(
             id: id, assetCode: AssetCode("DEVICE-\(id.description.prefix(8))"),
@@ -190,7 +233,8 @@ final class InventorySearchIndexMaintenanceBehaviorTests: XCTestCase {
             namespace: namespace, resourceKey: .object(id), recordType: "NettworkDevice",
             schemaVersion: 1, payload: try CanonicalJSONCoding.encode(device),
             systemFields: Data("fields-\(revision)".utf8), changeTag: "tag-\(revision)",
-            isTombstone: false, serverModifiedAt: timestamp, verifiedAt: timestamp)
+            isTombstone: false, visibility: visibility,
+            serverModifiedAt: timestamp, verifiedAt: timestamp)
     }
 
     private func deviceTypeRecord(

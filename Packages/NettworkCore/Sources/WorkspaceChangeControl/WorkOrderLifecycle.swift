@@ -149,7 +149,9 @@ public enum WorkOrderStateMachine {
         throws -> String?
     {
         try validateTransitionPrerequisites(order, status: status, context: context)
-        if status == .executing { try validateExecutingTransition(order, context: context) }
+        if status == .executing || status == .completed {
+            try validateExecutingTransition(order, context: context)
+        }
         let normalizedReason = try validatedCancellationReason(status: status, value: cancellationReason)
         if order.status == .cancellationRequested && status == .cancelled && context.releaseAuthorization == nil {
             throw WorkOrderTransitionError.cancellationReleaseAuthorizationRequired

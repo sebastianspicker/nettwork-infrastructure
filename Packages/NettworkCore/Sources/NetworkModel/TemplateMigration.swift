@@ -49,6 +49,7 @@ public enum TemplateMigration {
     ) throws -> DeviceTemplateMigrationPlan {
         guard let source = device.templateSnapshot else { throw TemplateValidationError.missingSnapshot(device.id) }
         guard source.templateID == target.id, target.version > source.version else { throw TemplateValidationError.invalidMigrationVersion(device.id) }
+        try TemplateCatalog.validate(portTemplates: source.portTemplates)
         try TemplateCatalog.validate(deviceTemplate: target)
         let targetSnapshot = DeviceTemplateSnapshot(template: target)
         let sourcePorts = Dictionary(uniqueKeysWithValues: source.portTemplates.map { ($0.id, $0) })

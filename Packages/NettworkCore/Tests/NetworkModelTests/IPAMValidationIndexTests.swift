@@ -64,12 +64,12 @@ final class IPAMValidationIndexTests: XCTestCase {
             XCTAssertEqual(error as? IPAMValidationError, .duplicatePrefix(first, firstDuplicate))
         }
 
-        let malformed = try malformedPrefix(from: first)
         XCTAssertThrowsError(
-            try DefaultIPAMValidationService.validate(prefixes: [malformed, first, firstDuplicate], addresses: [], vlans: [])
+            try decodePrefix(first, prefixLength: 33)
         ) { error in
-            XCTAssertEqual(error as? IPAMValidationError, .invalidPrefix(malformed.id))
+            XCTAssertNotNil(error as? DecodingError)
         }
+        XCTAssertThrowsError(try decodePrefix(first, prefixLength: Int.min))
     }
 
     func testIndexedValidationScalesAcrossThousandsOfPrefixesAndAddresses() throws {
@@ -115,10 +115,10 @@ final class IPAMValidationIndexTests: XCTestCase {
         return (prefixes, addresses)
     }
 
-    private func malformedPrefix(from prefix: Prefix) throws -> Prefix {
+    private func decodePrefix(_ prefix: Prefix, prefixLength: Int) throws -> Prefix {
         let data = try JSONEncoder().encode(prefix)
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        object["prefixLength"] = 33
+        object["prefixLength"] = prefixLength
         return try JSONDecoder().decode(Prefix.self, from: JSONSerialization.data(withJSONObject: object))
     }
 }

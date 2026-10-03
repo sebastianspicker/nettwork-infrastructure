@@ -64,11 +64,11 @@ extension ProductionFeatureMutationAuthority {
             trusted: trusted,
             phase: "approve",
             material: .init()
-        ) { current in
+        ) { current, commitTrusted in
             try WorkOrderStateMachine.transition(
                 current,
                 to: .approved,
-                context: .init(actorID: trusted.actor.cloudKitUserRecordName, at: trusted.actorSnapshot.capturedAt)
+                context: .init(actorID: commitTrusted.actor.cloudKitUserRecordName, at: commitTrusted.actorSnapshot.capturedAt)
             )
         }
     }
@@ -83,7 +83,7 @@ extension ProductionFeatureMutationAuthority {
             trusted: trusted,
             phase: "begin-execution",
             material: .init()
-        ) { current in
+        ) { current, commitTrusted in
             guard current.reservation?.id == reservationID,
                 current.intentDigest == intentDigest,
                 current.reservation?.acknowledgedByCloudKit != nil
@@ -93,7 +93,7 @@ extension ProductionFeatureMutationAuthority {
             return try WorkOrderStateMachine.transition(
                 current,
                 to: .executing,
-                context: .init(actorID: trusted.actor.cloudKitUserRecordName, at: trusted.actorSnapshot.capturedAt)
+                context: .init(actorID: commitTrusted.actor.cloudKitUserRecordName, at: commitTrusted.actorSnapshot.capturedAt)
             )
         }
     }
@@ -107,14 +107,14 @@ extension ProductionFeatureMutationAuthority {
         let material = try await completionTransitionMaterial(current: current, trusted: trusted, namespace: namespace)
         _ = try await commitTransition(
             workOrderID: workOrderID, namespace: namespace, trusted: trusted, phase: "complete", material: material
-        ) { authoritative in
+        ) { authoritative, commitTrusted in
             guard authoritative == current else {
                 throw ProductionFeatureMutationAuthorityError.invalidReservation
             }
             return try WorkOrderStateMachine.transition(
                 authoritative,
                 to: .completed,
-                context: .init(actorID: trusted.actor.cloudKitUserRecordName, at: trusted.actorSnapshot.capturedAt)
+                context: .init(actorID: commitTrusted.actor.cloudKitUserRecordName, at: commitTrusted.actorSnapshot.capturedAt)
             )
         }
     }
@@ -130,12 +130,16 @@ extension ProductionFeatureMutationAuthority {
             trusted: trusted,
             phase: "request-cancellation-\(digestString(reason))",
             material: .init()
-        ) { current in
+        ) { current, commitTrusted in
             guard [.reserved, .approved, .executing].contains(current.status) else {
                 throw ProductionFeatureMutationAuthorityError.invalidCancellationRequestState
             }
+            guard current.reservation?.ownerID == commitTrusted.actor.cloudKitUserRecordName else {
+                throw ProductionFeatureMutationAuthorityError.cancellationNotRequested
+            }
             return try WorkOrderStateMachine.requestCancellation(
-                current, reason: reason, by: trusted.actor.cloudKitUserRecordName, physicalStatus: physicalStatus, at: trusted.actorSnapshot.capturedAt
+                current, reason: reason, by: commitTrusted.actor.cloudKitUserRecordName,
+                physicalStatus: physicalStatus, at: commitTrusted.actorSnapshot.capturedAt
             )
         }
         guard updated.status == .cancellationRequested,
@@ -147,7 +151,7 @@ extension ProductionFeatureMutationAuthority {
         let confirmation: WorkOrderReservationPresentation.Confirmation
         if let acknowledgement = updated.reservation?.acknowledgedByCloudKit {
             confirmation =
-                trusted.actorSnapshot.capturedAt < acknowledgement.expiresAt
+                Date.now < acknowledgement.expiresAt
                 ? .confirmed
                 : .expired
         } else {
@@ -181,15 +185,23 @@ extension ProductionFeatureMutationAuthority {
             trusted: trusted,
             phase: "resolve-cancellation-\(digestString(reason))",
             material: .init(tombstones: lockTombstones, touchedPreconditions: lockPreconditions)
-        ) { authoritative in
+        ) { authoritative, commitTrusted in
             guard authoritative == current,
                 authoritative.status == .cancellationRequested,
                 authoritative.cancellationHistory.last?.releaseAuthorization == nil
             else {
                 throw ProductionFeatureMutationAuthorityError.cancellationNotRequested
             }
+            try validateCancellationReleaseAuthorization(
+                releaseAuthorization,
+                workOrder: authoritative,
+                namespace: namespace,
+                trusted: commitTrusted
+            )
             return try WorkOrderStateMachine.resolveCancellation(
-                authoritative, reason: reason, authorization: releaseAuthorization, at: trusted.actorSnapshot.capturedAt
+                authoritative, reason: reason,
+                authorization: releaseAuthorization,
+                at: commitTrusted.actorSnapshot.capturedAt
             )
         }
     }

@@ -42,17 +42,18 @@ enum CSVWorkspaceDocumentError: LocalizedError {
     }
 }
 
-/// A FileDocument writer for the already-verified core export document. It
-/// creates only package directories required to hold the document's entries;
-/// it never expands an external archive or synthesizes another payload.
+/// The save panel receives no archive payload: a new destination gets an empty
+/// package and an existing destination is preserved byte-for-byte. After the
+/// panel returns, a second live authorization gates synchronous publication of
+/// the verified core export document.
 struct NettworkArchiveDocument: FileDocument, @unchecked Sendable {
     static var readableContentTypes: [UTType] { [.nettworkArchive] }
     static var writableContentTypes: [UTType] { [.nettworkArchive] }
 
     private let package: FileWrapper
 
-    init(exportDocument: ArchiveExportDocument) throws {
-        package = try Self.packageWrapper(for: exportDocument.entries)
+    init() {
+        package = FileWrapper(directoryWithFileWrappers: [:])
     }
 
     init(configuration: ReadConfiguration) throws {
@@ -63,7 +64,20 @@ struct NettworkArchiveDocument: FileDocument, @unchecked Sendable {
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        package
+        placeholderWrapper(preserving: configuration.existingFile)
+    }
+
+    func placeholderWrapper(preserving existingFile: FileWrapper?) -> FileWrapper {
+        existingFile ?? package
+    }
+
+    static func publish(_ exportDocument: ArchiveExportDocument, to destination: URL) throws {
+        let package = try packageWrapper(for: exportDocument.entries)
+        try package.write(
+            to: destination,
+            options: .atomic,
+            originalContentsURL: destination
+        )
     }
 
     private static func packageWrapper(for entries: [String: Data]) throws -> FileWrapper {

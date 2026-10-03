@@ -10,6 +10,8 @@
     @available(iOS 17.0, macOS 14.0, macCatalyst 17.0, tvOS 17.0, watchOS 10.0, *)
     public actor CloudKitSyncEngineBatchSourceAdapter: CloudKitSyncEngineBatchSource {
         public static let defaultMaximumRecordNameIdentities = 300_000
+        public static let defaultMaximumBatchRecords = 250_000
+        public static let defaultMaximumBatchBytes = 256 * 1_024 * 1_024
 
         private struct ActiveFetch {
             let stateVersionAtStart: UInt64
@@ -17,6 +19,7 @@
             var latestState: Data?
             var recordsByResourceKey: [ResourceKey: CloudRecordEnvelope] = [:]
             var resourceKeyByRecordName: [String: ResourceKey] = [:]
+            var admission: CloudKitFetchAdmission
             var didFetchChanges = false
             var failure: CloudKitSyncEngineBatchSourceError?
         }
@@ -26,6 +29,8 @@
         private let zoneID: CKRecordZone.ID
         private let identityIndex: any CloudRecordNameIdentityIndex
         private let maximumRecordNameIdentities: Int
+        private let maximumBatchRecords: Int
+        private let maximumBatchBytes: Int
         private let delegate: CloudKitSyncEngineBatchSourceDelegate
         private let engine: CKSyncEngine
         private var confirmedPersistedState: Data?
@@ -43,10 +48,15 @@
             database: CKDatabase, namespace: PersistenceNamespace, persistedState: Data?,
             identityIndex: any CloudRecordNameIdentityIndex,
             maximumRecordNameIdentities: Int = CloudKitSyncEngineBatchSourceAdapter.defaultMaximumRecordNameIdentities,
+            maximumBatchRecords: Int = CloudKitSyncEngineBatchSourceAdapter.defaultMaximumBatchRecords,
+            maximumBatchBytes: Int = CloudKitSyncEngineBatchSourceAdapter.defaultMaximumBatchBytes,
             subscriptionID: CKSubscription.ID? = nil
         ) throws {
             guard maximumRecordNameIdentities > 0 else {
                 throw CloudKitSyncEngineBatchSourceError.invalidIdentityIndexLimit
+            }
+            guard maximumBatchRecords > 0, maximumBatchBytes > 0 else {
+                throw CloudKitSyncEngineBatchSourceError.invalidBatchAdmissionLimit
             }
             let delegate = CloudKitSyncEngineBatchSourceDelegate()
             var configuration = CKSyncEngine.Configuration(
@@ -60,6 +70,8 @@
             self.zoneID = CloudKitProductionBoundary.zoneID(for: namespace)
             self.identityIndex = identityIndex
             self.maximumRecordNameIdentities = maximumRecordNameIdentities
+            self.maximumBatchRecords = maximumBatchRecords
+            self.maximumBatchBytes = maximumBatchBytes
             self.delegate = delegate
             self.engine = CKSyncEngine(configuration)
             self.confirmedPersistedState = persistedState
@@ -86,7 +98,13 @@
                 throw CloudKitSyncEngineBatchSourceError.persistedStateMismatch
             }
 
-            activeFetch = ActiveFetch(stateVersionAtStart: stateVersion)
+            activeFetch = ActiveFetch(
+                stateVersionAtStart: stateVersion,
+                admission: try CloudKitFetchAdmission(
+                    maximumRecords: maximumBatchRecords,
+                    maximumBytes: maximumBatchBytes
+                )
+            )
             do {
                 try await engine.fetchChanges(.init(scope: .zoneIDs([zoneID])))
             } catch {
@@ -168,7 +186,7 @@
                 return
             }
             stateVersion &+= 1
-            guard var activeFetch, activeFetch.didReceiveWillFetchChanges else { return }
+            guard var activeFetch, activeFetch.failure == nil, activeFetch.didReceiveWillFetchChanges else { return }
             activeFetch.latestState = state
             self.activeFetch = activeFetch
         }
@@ -187,7 +205,7 @@
             self.activeFetch = activeFetch
         }
         private func collect(_ changes: CKSyncEngine.Event.FetchedRecordZoneChanges) async {
-            guard activeFetch != nil else { return }
+            guard activeFetch?.failure == nil else { return }
             do {
                 for modification in changes.modifications {
                     try await collect(modification.record)
@@ -219,20 +237,24 @@
             }
 
             let isDeleted = (record["isDeleted"] as? NSNumber)?.boolValue ?? false
-            let recordAsset = try assetDescriptor(from: record, resourceKey: resourceKey, isDeleted: isDeleted)
+            let payload = record["payload"] as? Data ?? Data()
+            let assetSource = try assetSource(from: record, resourceKey: resourceKey, isDeleted: isDeleted)
             let systemFields = try NSKeyedArchiver.archivedData(withRootObject: record, requiringSecureCoding: true)
+            try admit(byteCounts: [payload.count, systemFields.count, assetSource?.metadata.byteCount ?? 0])
+            let recordAsset = try assetSource.map { try assetDescriptor(from: $0) }
             let schemaVersion = (record["schemaVersion"] as? NSNumber)?.intValue ?? 0
             let changeTag = record.recordChangeTag ?? ""
             let envelope = CloudRecordEnvelope(
                 recordName: recordName, resourceKey: resourceKey,
                 workspaceID: namespace.workspaceID, recordType: record.recordType, schemaVersion: schemaVersion,
-                payload: record["payload"] as? Data ?? Data(), recordAsset: recordAsset,
+                payload: payload, recordAsset: recordAsset,
                 systemFields: systemFields, changeTag: changeTag, isDeleted: isDeleted)
             let identity = CloudRecordNameIdentity(
                 recordName: recordName, resourceKey: resourceKey,
                 recordType: record.recordType, schemaVersion: schemaVersion, systemFields: systemFields,
                 changeTag: changeTag)
             try await identityIndex.store(identity, in: namespace, maximumEntries: maximumRecordNameIdentities)
+            try throwIfActiveFetchFailed()
             try append(envelope)
         }
 
@@ -248,6 +270,7 @@
             else {
                 throw CloudKitSyncEngineBatchSourceError.invalidRemoteIdentity
             }
+            try admit(byteCounts: [identity.systemFields.count])
             try append(
                 CloudRecordEnvelope(
                     recordName: identity.recordName, resourceKey: identity.resourceKey,
@@ -259,9 +282,14 @@
         /// The metadata field is a compact record-bound capability, not an
         /// independently fetched object. Its bounded CKAsset bytes are converted
         /// to immutable transport data only after the declared SHA-256 matches.
-        private func assetDescriptor(
+        private struct AssetSource {
+            let metadata: CloudRecordAssetMetadata
+            let url: URL
+        }
+
+        private func assetSource(
             from record: CKRecord, resourceKey: ResourceKey, isDeleted: Bool
-        ) throws -> CloudRecordAssetDescriptor? {
+        ) throws -> AssetSource? {
             let encodedMetadata = record[CloudKitProductionBoundary.assetMetadataFieldName] as? Data
             guard let encodedMetadata else { return nil }
             guard !isDeleted,
@@ -270,13 +298,30 @@
             else {
                 throw CloudKitSyncEngineBatchSourceError.invalidRemoteAsset(resourceKey)
             }
-            let durable = try CloudRecordAssetDescriptor(metadata: metadata, storage: .durableFile(url))
+            return AssetSource(metadata: metadata, url: url)
+        }
+
+        private func assetDescriptor(from source: AssetSource) throws -> CloudRecordAssetDescriptor {
+            let durable = try CloudRecordAssetDescriptor(metadata: source.metadata, storage: .durableFile(source.url))
             let bytes = try durable.validatedBytes()
-            return try CloudRecordAssetDescriptor(metadata: metadata, storage: .inline(bytes))
+            return try CloudRecordAssetDescriptor(metadata: source.metadata, storage: .inline(bytes))
+        }
+
+        private func admit(byteCounts: [Int]) throws {
+            guard var activeFetch, activeFetch.failure == nil else {
+                throw CloudKitSyncEngineBatchSourceError.batchAdmissionLimitExceeded
+            }
+            try activeFetch.admission.admit(byteCounts: byteCounts)
+            self.activeFetch = activeFetch
+        }
+
+        private func throwIfActiveFetchFailed() throws {
+            if let failure = activeFetch?.failure { throw failure }
         }
 
         private func append(_ envelope: CloudRecordEnvelope) throws {
             guard var activeFetch else { return }
+            if let failure = activeFetch.failure { throw failure }
             if let existing = activeFetch.resourceKeyByRecordName[envelope.recordName], existing != envelope.resourceKey {
                 throw CloudKitSyncEngineBatchSourceError.duplicateRecordName(envelope.recordName)
             }
@@ -308,6 +353,9 @@
             if terminalFailure == nil { terminalFailure = error }
             if var activeFetch, activeFetch.failure == nil {
                 activeFetch.failure = error
+                activeFetch.latestState = nil
+                activeFetch.recordsByResourceKey.removeAll(keepingCapacity: false)
+                activeFetch.resourceKeyByRecordName.removeAll(keepingCapacity: false)
                 self.activeFetch = activeFetch
             }
         }

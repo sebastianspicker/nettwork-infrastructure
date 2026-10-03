@@ -70,10 +70,9 @@ extension ProductionFeatureMutationAuthority {
         trusted: TrustedProductionSession,
         phase: String,
         material: ProductionMutationMaterial,
-        update: (WorkOrder) throws -> WorkOrder
+        update: (WorkOrder, TrustedProductionSession) throws -> WorkOrder
     ) async throws -> (OperationReceipt, WorkOrder) {
         let (current, workOrderExact) = try await exactWorkOrder(id: workOrderID, in: namespace)
-        let updated = try update(current)
         let operationID = stableID(
             domain: "work-order-transition",
             components: [workOrderID.description, phase, String(current.revision)]
@@ -85,13 +84,14 @@ extension ProductionFeatureMutationAuthority {
             businessKeys: businessKeys, dependencies: dependencies.others
         )
         try validateTransitionRecordCount(material: material, dependencies: dependencies.others)
+        let commitTrusted = try await sessionAuthorizer.refresh(trusted)
+        let updated = try update(current, commitTrusted)
         let state = AuthoritativeMutationState(knownRecords: known, currentWorkOrder: current)
         let mutation = try AuthoritativeWorkOrderMutationFactory.make(
-            operationID: operationID, workspaceZone: namespace.workspaceZone, actor: trusted.actorSnapshot, currentWorkOrder: current,
+            operationID: operationID, workspaceZone: namespace.workspaceZone, actor: commitTrusted.actorSnapshot, currentWorkOrder: current,
             updatedWorkOrder: updated, state: state, saves: material.saves, tombstones: material.tombstones,
             readAssertions: dependencies.others + [dependencies.workspace], policyVersion: policy.policyVersion
         )
-        try await sessionAuthorizer.revalidate(trusted)
         let receipt = try await mutations.commit(mutation)
         guard receipt == mutation.receipt else { throw ProductionFeatureMutationAuthorityError.receiptMismatch }
         return (receipt, updated)

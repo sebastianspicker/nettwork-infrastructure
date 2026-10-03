@@ -32,6 +32,7 @@ final class TransferFeatureViewModel {
     var csvOperationToken: UUID?
     private var csvWorkspaceExportToken: UUID?
     private var stagedCSVWorkspaceExportAuthorization: AuthorizedOperationContext?
+    private var stagedArchiveExportAuthorization: AuthorizedOperationContext?
     var stagedArchiveAuthorization: AuthorizedOperationContext?
     private var restoreSelectionToken: UUID?
     private var archiveOperation: ArchiveOperation?
@@ -116,21 +117,54 @@ final class TransferFeatureViewModel {
         }
         guard canBeginArchiveExport else { return }
         let token = beginArchiveOperation(.exporting)
+        stagedArchiveExportAuthorization = nil
         archiveState = .exporting
         do {
             let document = try await service.exportArchive(authorization: authorization)
             try Task.checkCancellation()
             guard isCurrentArchiveOperation(token, .exporting) else { return }
             archiveState = .exported(document)
+            stagedArchiveExportAuthorization = authorization
             finishArchiveOperation(token)
         } catch is CancellationError {
             guard isCurrentArchiveOperation(token, .exporting) else { return }
             archiveState = .idle
+            stagedArchiveExportAuthorization = nil
             finishArchiveOperation(token)
         } catch {
             guard isCurrentArchiveOperation(token, .exporting) else { return }
             archiveState = .failed(error.localizedDescription)
+            stagedArchiveExportAuthorization = nil
             finishArchiveOperation(token)
+        }
+    }
+
+    func prepareArchiveExportHandoff() async throws -> ArchiveExportDocument {
+        guard case .exported(let document) = archiveState,
+            let authorization = stagedArchiveExportAuthorization
+        else {
+            throw ArchiveExportHandoffError.noStagedExport
+        }
+        do {
+            try await service.validateArchiveExportAuthorization(authorization)
+            return document
+        } catch {
+            archiveState = .idle
+            stagedArchiveExportAuthorization = nil
+            throw error
+        }
+    }
+
+    func validateArchiveExportHandoff() async throws {
+        guard let authorization = stagedArchiveExportAuthorization else {
+            throw ArchiveExportHandoffError.noStagedExport
+        }
+        do {
+            try await service.validateArchiveExportAuthorization(authorization)
+        } catch {
+            archiveState = .idle
+            stagedArchiveExportAuthorization = nil
+            throw error
         }
     }
 

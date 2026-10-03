@@ -22,10 +22,17 @@ actor StubSemanticValidator: ProductionDraftSemanticValidating {
 
 actor StubCompletionMaterializer: ProductionCompletionMaterializing {
     private var material = ProductionMutationMaterial()
+    private var delayNanoseconds: UInt64 = 0
 
     func setMaterial(_ material: ProductionMutationMaterial) { self.material = material }
+    func setDelayNanoseconds(_ delayNanoseconds: UInt64) { self.delayNanoseconds = delayNanoseconds }
 
-    func materializeCompletion(of _: WorkOrder, at _: Date, in _: PersistenceNamespace) async throws -> ProductionMutationMaterial { material }
+    func materializeCompletion(of _: WorkOrder, at _: Date, in _: PersistenceNamespace) async throws -> ProductionMutationMaterial {
+        if delayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: delayNanoseconds)
+        }
+        return material
+    }
 }
 
 struct StubCorrectiveBuilder: ProductionCorrectiveDraftBuilding {
@@ -140,30 +147,31 @@ struct MutationAuthorityHarness {
     /// use this instead of `reserve` so they never depend on a commit path.
     @discardableResult
     func seedReservedOrder(
-        _ draft: WorkOrderDraft, status: WorkOrderStatus = .reserved, expiresAt: Date = .distantFuture
+        _ draft: WorkOrderDraft, status: WorkOrderStatus = .reserved,
+        expiresAt: Date = .distantFuture, reservationOwnerID: String? = nil
     ) async throws -> (order: WorkOrder, presentation: WorkOrderReservationPresentation) {
-        let owner = session.actor.cloudKitUserRecordName
+        let actorID = session.actor.cloudKitUserRecordName
+        let owner = reservationOwnerID ?? actorID
         let digest = try expectedDigest(for: draft)
         let reservation = WorkOrderReservation(ownerID: owner, resourceKeys: draft.resourceKeys)
         let draftOrder = WorkOrder(
-            id: draft.id, kind: draft.kind, title: draft.title, creatorID: owner, ticket: draft.ticket.trimmingCharacters(in: .whitespacesAndNewlines),
+            id: draft.id, kind: draft.kind, title: draft.title, creatorID: actorID,
+            ticket: draft.ticket.trimmingCharacters(in: .whitespacesAndNewlines),
             plannedOperations: draft.operations, intentDigest: digest, reservation: reservation)
         let context = WorkOrderTransitionContext(actorID: owner, at: ServiceFixture.epoch)
         let acknowledgement = CloudKitAcknowledgement(
             workspaceZone: namespace.workspaceZone, cloudKitAccountRecordName: owner, sessionGeneration: session.actor.sessionGeneration,
             reservationID: reservation.id, workOrderID: draft.id, ownerID: owner, resourceKeys: draft.resourceKeys, intentDigest: digest,
             systemFields: Data([1]), changeTag: "reservation-ack", acknowledgedAt: ServiceFixture.epoch, expiresAt: expiresAt)
-        var order = try WorkOrderStateMachine.acknowledgeReservation(
-            try WorkOrderStateMachine.transition(draftOrder, to: .reserved, context: context), acknowledgement: acknowledgement,
-            observedAt: ServiceFixture.epoch)
-        if [.approved, .executing, .cancellationRequested].contains(status) {
-            order = try WorkOrderStateMachine.transition(order, to: .approved, context: context)
-        }
-        if status == .executing {
-            order = try WorkOrderStateMachine.transition(order, to: .executing, context: context)
-        }
-        if status == .cancellationRequested {
-            order = try WorkOrderStateMachine.requestCancellation(order, reason: "Room closed", by: owner, at: ServiceFixture.epoch)
+        let order: WorkOrder
+        if reservationOwnerID == nil {
+            order = try lifecycleOrder(
+                draftOrder, status: status, context: context,
+                acknowledgement: acknowledgement)
+        } else {
+            order = externallyOwnedOrder(
+                draft, status: status, actorID: actorID, owner: owner,
+                digest: digest, reservation: reservation, acknowledgement: acknowledgement)
         }
         await server.put(
             CloudExactRecordSnapshot(
@@ -174,6 +182,50 @@ struct MutationAuthorityHarness {
             id: reservation.id, workOrderID: order.id, exactIntentDigest: digest, resourceKeys: draft.resourceKeys, expiresAt: expiresAt,
             confirmation: .confirmed, workOrderStatus: order.status, cancellationRequestID: order.cancellationHistory.last?.id)
         return (order, presentation)
+    }
+
+    private func lifecycleOrder(
+        _ draftOrder: WorkOrder, status: WorkOrderStatus,
+        context: WorkOrderTransitionContext, acknowledgement: CloudKitAcknowledgement
+    ) throws -> WorkOrder {
+        var order = try WorkOrderStateMachine.acknowledgeReservation(
+            try WorkOrderStateMachine.transition(draftOrder, to: .reserved, context: context),
+            acknowledgement: acknowledgement, observedAt: ServiceFixture.epoch)
+        if [.approved, .executing, .cancellationRequested].contains(status) {
+            order = try WorkOrderStateMachine.transition(order, to: .approved, context: context)
+        }
+        if status == .executing {
+            order = try WorkOrderStateMachine.transition(order, to: .executing, context: context)
+        }
+        if status == .cancellationRequested {
+            order = try WorkOrderStateMachine.requestCancellation(
+                order, reason: "Room closed", by: context.actorID, at: ServiceFixture.epoch)
+        }
+        return order
+    }
+
+    private func externallyOwnedOrder(
+        _ draft: WorkOrderDraft, status: WorkOrderStatus, actorID: String,
+        owner: String, digest: IntentDigest, reservation: WorkOrderReservation,
+        acknowledgement: CloudKitAcknowledgement
+    ) -> WorkOrder {
+        let isExecuting = status == .executing
+        let isApproved = status == .approved || isExecuting
+        let acknowledgedReservation =
+            isExecuting
+            ? WorkOrderReservation(
+                id: reservation.id, ownerID: owner, resourceKeys: reservation.resourceKeys,
+                acknowledgedByCloudKit: acknowledgement)
+            : reservation
+        return WorkOrder(
+            id: draft.id, kind: draft.kind, title: draft.title, status: status,
+            creatorID: actorID, ticket: draft.ticket.trimmingCharacters(in: .whitespacesAndNewlines),
+            plannedOperations: draft.operations, revision: 3, intentDigest: digest,
+            reservation: acknowledgedReservation,
+            approvedBy: isApproved ? owner : nil,
+            approvedAt: isApproved ? ServiceFixture.epoch : nil,
+            executedBy: isExecuting ? owner : nil,
+            executionStartedAt: isExecuting ? ServiceFixture.epoch : nil)
     }
 
     func serverWorkOrder(_ id: ObjectID) async throws -> WorkOrder {

@@ -27,6 +27,12 @@ enum CSVWorkspaceExportHandoffError: LocalizedError {
     var errorDescription: String? { "Export the current workspace again before handing CSV files to a destination." }
 }
 
+enum ArchiveExportHandoffError: LocalizedError {
+    case noStagedExport
+
+    var errorDescription: String? { "Export the current workspace again before saving an archive." }
+}
+
 enum ArchiveTransferState {
     case idle
     case exporting

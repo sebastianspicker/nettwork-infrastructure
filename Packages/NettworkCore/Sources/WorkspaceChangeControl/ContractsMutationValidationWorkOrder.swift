@@ -133,7 +133,7 @@ extension AuthoritativeMutationValidator {
     }
 
     static func validateExecutingReservation(_ mutation: AuthoritativeMutation) throws {
-        guard mutation.workOrder.status == .executing else { return }
+        guard mutation.workOrder.status == .executing || mutation.workOrder.status == .completed else { return }
         guard let reservation = mutation.workOrder.reservation,
             let acknowledgement = reservation.acknowledgedByCloudKit,
             reservation.ownerID == mutation.actor.actorID,

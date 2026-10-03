@@ -91,6 +91,23 @@ public actor ProductionSessionAuthorizer: CurrentAuthorizationContextProviding, 
         try OfficialClientPolicy.authorizeMutation(actor: actor, account: current, requiresAdministrator: trusted.actor.role == .administrator)
     }
 
+    func refresh(_ trusted: TrustedProductionSession) async throws -> TrustedProductionSession {
+        let current = try await verifiedSession(namespace: trusted.account.namespace)
+        guard current.account == trusted.account,
+            current.actor == trusted.actor,
+            current.lease == trusted.lease,
+            current.actorSnapshot.sessionID == trusted.actorSnapshot.sessionID
+        else {
+            throw ProductionSessionAuthorizationError.sessionSuperseded
+        }
+        try OfficialClientPolicy.authorizeMutation(
+            actor: current.actor,
+            account: current.account,
+            requiresAdministrator: trusted.actor.role == .administrator
+        )
+        return current
+    }
+
     public func validateCurrent(_ context: AuthorizedOperationContext) async -> Bool {
         let requiresAdministrator: Bool
         switch context.action {

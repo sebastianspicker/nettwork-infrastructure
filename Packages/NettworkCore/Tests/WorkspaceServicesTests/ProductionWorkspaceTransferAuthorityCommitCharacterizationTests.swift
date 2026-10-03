@@ -58,6 +58,36 @@ final class ProductionWorkspaceTransferAuthorityCommitCharacterizationTests: XCT
             memberCount: archive.manifest.recordCounts.values.reduce(0, +))
     }
 
+    func testCSVActivationRejectsAnAdministratorDowngradedBeforeAuthorityEntry() async throws {
+        let harness = try await StagedTransferHarness.make()
+        let fixture = StagedTransferHarness.siteImports(siteCount: 1)
+        let report = try await harness.authority.dryRun(fixture.records, in: harness.namespace)
+        let plan = try ImportPlan(
+            namespace: harness.namespace,
+            canonicalSHA256: report.canonicalSHA256,
+            recordCounts: [CSVTable.locations.rawValue: fixture.records.count],
+            totalRecordCount: fixture.records.count,
+            stagingGeneration: 1,
+            operationID: ObjectID(),
+            dryRunReport: report
+        )
+        let technician = ServiceFixture.actor(for: harness.session.account, role: .technician)
+        await harness.session.actors.setActor(technician)
+
+        await assertThrows(OfficialClientPolicyError.technicianCannotAdminister) {
+            try await harness.authority.activateStagedCSV(
+                records: fixture.records,
+                plan: plan,
+                requiringEmptyWorkspace: true,
+                expectedReceipt: try CSVImportActivationReceipt.expected(for: plan)
+            )
+        }
+        let accepted = await harness.transport.accepted
+        let activations = await harness.server.activations
+        XCTAssertTrue(accepted.isEmpty)
+        XCTAssertTrue(activations.isEmpty)
+    }
+
     // MARK: Helpers
 
     /// Asserts that exactly the expected members were staged invisibly, that

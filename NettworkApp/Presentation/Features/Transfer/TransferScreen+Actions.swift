@@ -106,19 +106,30 @@ extension TransferScreen {
         return "nettwork-\(document.manifest.workspaceID).nettworkarchive"
     }
 
-    func presentArchiveExporter(for document: ArchiveExportDocument) {
-        do {
-            archiveDocument = try NettworkArchiveDocument(exportDocument: document)
-            isArchiveExporterPresented = true
-        } catch {
-            archiveSaveMessage = error.localizedDescription
+    func presentArchiveExporter(for _: ArchiveExportDocument) {
+        Task {
+            do {
+                try await model.validateArchiveExportHandoff()
+                archiveDocument = NettworkArchiveDocument()
+                isArchiveExporterPresented = true
+            } catch {
+                archiveSaveMessage = error.localizedDescription
+            }
         }
     }
 
     func completeArchiveExport(_ result: Result<URL, Error>) {
         switch result {
-        case .success:
-            archiveSaveMessage = "Archive saved to the selected location."
+        case .success(let url):
+            Task {
+                do {
+                    let document = try await model.prepareArchiveExportHandoff()
+                    try NettworkArchiveDocument.publish(document, to: url)
+                    archiveSaveMessage = "Archive saved to the selected location."
+                } catch {
+                    archiveSaveMessage = error.localizedDescription
+                }
+            }
         case .failure(let error):
             archiveSaveMessage = error.localizedDescription
         }

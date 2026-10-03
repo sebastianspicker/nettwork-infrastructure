@@ -6,6 +6,8 @@
     @available(iOS 17.0, macOS 14.0, macCatalyst 17.0, tvOS 17.0, watchOS 10.0, *)
     public enum CloudKitSyncEngineBatchSourceError: Error, Hashable, Sendable {
         case invalidIdentityIndexLimit
+        case invalidBatchAdmissionLimit
+        case batchAdmissionLimitExceeded
         case bindingMismatch
         case persistedStateMismatch
         case fetchedStateAwaitingMirrorCommit
@@ -23,6 +25,36 @@
         case identityIndexFailure
         case invalidRemoteAsset(ResourceKey)
         case unknownEvent
+    }
+
+    struct CloudKitFetchAdmission: Sendable {
+        let maximumRecords: Int
+        let maximumBytes: Int
+        private(set) var recordCount = 0
+        private(set) var byteCount = 0
+
+        init(maximumRecords: Int, maximumBytes: Int) throws {
+            guard maximumRecords > 0, maximumBytes > 0 else {
+                throw CloudKitSyncEngineBatchSourceError.invalidBatchAdmissionLimit
+            }
+            self.maximumRecords = maximumRecords
+            self.maximumBytes = maximumBytes
+        }
+
+        mutating func admit(byteCounts: [Int]) throws {
+            guard recordCount < maximumRecords else {
+                throw CloudKitSyncEngineBatchSourceError.batchAdmissionLimitExceeded
+            }
+            var nextBytes = byteCount
+            for count in byteCounts {
+                guard count >= 0, count <= maximumBytes - nextBytes else {
+                    throw CloudKitSyncEngineBatchSourceError.batchAdmissionLimitExceeded
+                }
+                nextBytes += count
+            }
+            recordCount += 1
+            byteCount = nextBytes
+        }
     }
 
     @available(iOS 17.0, macOS 14.0, macCatalyst 17.0, tvOS 17.0, watchOS 10.0, *)

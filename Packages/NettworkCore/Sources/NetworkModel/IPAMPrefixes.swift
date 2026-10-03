@@ -61,6 +61,70 @@ public struct Prefix: Identifiable, Codable, Hashable, Sendable {
         self.state = state
         self.tombstonedAt = tombstonedAt
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, vrfID, network, prefixLength, name, reservedRanges, state, tombstonedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let network = try container.decode(IPAddress.self, forKey: .network)
+        let prefixLength = try container.decode(Int.self, forKey: .prefixLength)
+        let reservedRanges = try container.decode([ReservedAddressRange].self, forKey: .reservedRanges)
+        guard Self.isCanonicalNetwork(network, prefixLength: prefixLength) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .prefixLength,
+                in: container,
+                debugDescription: "Prefix length and network address must form a canonical CIDR."
+            )
+        }
+        guard Self.rangesAreContained(reservedRanges, network: network, prefixLength: prefixLength) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .reservedRanges,
+                in: container,
+                debugDescription: "Reserved ranges must be canonical and contained by the prefix."
+            )
+        }
+        guard Self.rangesDoNotOverlap(reservedRanges) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .reservedRanges,
+                in: container,
+                debugDescription: "Reserved ranges must not overlap."
+            )
+        }
+        id = try container.decode(ObjectID.self, forKey: .id)
+        vrfID = try container.decode(ObjectID.self, forKey: .vrfID)
+        self.network = network
+        self.prefixLength = prefixLength
+        name = try container.decode(String.self, forKey: .name)
+        self.reservedRanges = reservedRanges
+        state = try container.decode(IPAMRecordState.self, forKey: .state)
+        tombstonedAt = try container.decodeIfPresent(Date.self, forKey: .tombstonedAt)
+    }
+
+    private static func isCanonicalNetwork(_ network: IPAddress, prefixLength: Int) -> Bool {
+        network.isWellFormed
+            && (0...network.bitWidth).contains(prefixLength)
+            && network.masked(prefixLength: prefixLength) == network
+    }
+
+    private static func rangesAreContained(
+        _ ranges: [ReservedAddressRange], network: IPAddress, prefixLength: Int
+    ) -> Bool {
+        let upperBound = network.upperBound(prefixLength: prefixLength)
+        return ranges.allSatisfy { range in
+            range.lowerBound.isWellFormed && range.upperBound.isWellFormed
+                && range.lowerBound.bitWidth == network.bitWidth
+                && range.upperBound.bitWidth == network.bitWidth
+                && network <= range.lowerBound && range.lowerBound <= range.upperBound
+                && range.upperBound <= upperBound
+        }
+    }
+
+    private static func rangesDoNotOverlap(_ ranges: [ReservedAddressRange]) -> Bool {
+        let sorted = ranges.sorted { $0.lowerBound < $1.lowerBound }
+        return !sorted.indices.dropLast().contains { sorted[$0].overlaps(sorted[$0 + 1]) }
+    }
     public var cidr: String { "\(network)/\(prefixLength)" }
     public var lowerBound: IPAddress { network }
     public var upperBound: IPAddress { network.upperBound(prefixLength: prefixLength) }

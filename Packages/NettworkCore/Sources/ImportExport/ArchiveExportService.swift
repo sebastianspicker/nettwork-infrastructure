@@ -41,6 +41,10 @@ public struct AuthorizedArchiveExportService: Sendable {
         return ArchiveExportDocument(manifest: manifest, completionMarker: marker, entries: staged.entries)
     }
 
+    public func validateAuthorization(_ context: AuthorizedOperationContext) async throws {
+        try await authorize(context)
+    }
+
     private func stageAssets(
         _ assets: [ArchiveAssetPayload]
     ) throws -> (entries: [String: Data], payloads: [String: ArchiveAssetPayload]) {

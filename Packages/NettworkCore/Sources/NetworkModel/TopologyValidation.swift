@@ -261,7 +261,12 @@ public enum DefaultTopologyEngine {
     }
 
     public static func validate(_ placement: RackPlacement, in rack: Rack) throws {
-        guard placement.startRU > 0, placement.heightRU > 0, placement.startRU + placement.heightRU - 1 <= rack.heightRU else {
+        guard rack.heightRU > 0,
+            placement.startRU > 0,
+            placement.heightRU > 0,
+            placement.startRU <= rack.heightRU,
+            placement.heightRU <= rack.heightRU - placement.startRU + 1
+        else {
             throw TopologyValidationError.invalidRackPlacement(placement.deviceID)
         }
     }
