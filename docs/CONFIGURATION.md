@@ -132,7 +132,7 @@ Before treating a build as deployable, verify outside this repository:
    file protection on supported physical devices.
 9. Privacy review for logs, metrics, retention, backups, and exported artifacts.
 
-CI checks source, runs the Swift package and macOS app tests, and builds the
+CI checks source and builds the Swift package, the macOS app, and the
 iOS Simulator app without signing. It does not perform the deployment checks
 above. Verify signing, live CloudKit behavior, and device integrations in your
 organization's environment.

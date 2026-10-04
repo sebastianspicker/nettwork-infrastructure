@@ -123,8 +123,7 @@ make verify-package
 make verify-native
 ```
 
-The native gate runs the macOS app tests and builds the iOS Simulator app
-without signing. These checks do not require a production CloudKit setup.
+The native gate builds the macOS and iOS Simulator apps without signing. These checks do not require a production CloudKit setup.
 
 ## Connect an organization workspace
 
@@ -144,7 +143,6 @@ workspace.
 | --- | --- |
 | `NettworkApp/` | SwiftUI screens, app composition, and Apple-platform adapters |
 | `Packages/NettworkCore/` | Swift libraries for the model, changes, persistence, sync, content safety, transfer, feature contracts, and production workspace services |
-| `Tests/App/` | Feature view-model, composition, routing, and platform-adapter tests |
 | `site/` | Static browser demo and sample data |
 | `Design/Brand/` | Master icon, palette, and asset generation rules |
 | `scripts/` | Validation, icon generation, and benchmark tools |

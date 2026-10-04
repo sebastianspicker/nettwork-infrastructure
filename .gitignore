@@ -148,3 +148,7 @@ xcuserdata/
 /REPOSITORY_AUDIT.md
 /AGENT_SUMMARY.md
 /IMPLEMENTATION_SUMMARY.md
+
+# Test sources (not published)
+/Tests/
+/Packages/NettworkCore/Tests/

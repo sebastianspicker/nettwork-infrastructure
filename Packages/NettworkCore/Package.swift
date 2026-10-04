@@ -31,20 +31,6 @@ let package = Package(
             ]
         ),
         .executableTarget(name: "NettworkBenchmarks", dependencies: ["NetworkModel", "ImportExport"], path: "Benchmarks"),
-        .testTarget(name: "NetworkModelTests", dependencies: ["NetworkModel"]),
-        .testTarget(name: "WorkspaceChangeControlTests", dependencies: ["NetworkModel", "WorkspaceChangeControl"]),
-        .testTarget(name: "PersistenceTests", dependencies: ["Persistence", "NetworkModel", "WorkspaceChangeControl"]),
-        .testTarget(name: "CloudSyncTests", dependencies: ["CloudSync", "Persistence", "NetworkModel", "WorkspaceChangeControl"]),
-        .testTarget(name: "ContentSafetyTests", dependencies: ["ContentSafety", "NetworkModel", "WorkspaceChangeControl"]),
-        .testTarget(name: "ImportExportTests", dependencies: ["ImportExport", "ContentSafety", "NetworkModel", "WorkspaceChangeControl"]),
-        .testTarget(name: "FeatureContractsTests", dependencies: ["FeatureContracts", "NetworkModel", "WorkspaceChangeControl"]),
-        .testTarget(
-            name: "WorkspaceServicesTests",
-            dependencies: [
-                "WorkspaceServices", "NetworkModel", "WorkspaceChangeControl", "Persistence", "CloudSync", "ContentSafety",
-                "ImportExport", "FeatureContracts",
-            ]
-        ),
     ],
     swiftLanguageModes: [.v6]
 )

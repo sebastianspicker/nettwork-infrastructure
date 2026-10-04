@@ -76,7 +76,7 @@ Treat public Codable representations, stable identifiers, schema versions,
 archive/CSV formats, migration history, mutation receipts, and authorization
 semantics as compatibility boundaries.
 
-## Build and test
+## Build
 
 From the repository root:
 
@@ -90,13 +90,11 @@ From this directory:
 ```sh
 swift package dump-package
 swift build
-swift test
 ```
 
-Tests are split by production product under `Tests/`. SwiftPM output in
-`.build/` and `.swiftpm/` is generated and must not be edited or documented as
-source.
+SwiftPM output in `.build/` and `.swiftpm/` is generated and must not be
+edited or documented as source.
 
-The package tests use local adapters and test doubles. Passing them does not
+A passing build does not
 verify a real CloudKit container, production authorization policy, signing,
 security-scoped files, camera capture, printing, or physical-device behavior.

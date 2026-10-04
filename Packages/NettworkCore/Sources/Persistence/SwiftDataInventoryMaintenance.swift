@@ -176,9 +176,14 @@ extension SwiftDataPersistenceStore {
         else {
             return true
         }
+        // Read the model's counts before the short-circuiting `||` chain so its
+        // autoclosures do not capture the non-Sendable SwiftData model.
+        let nodeCount = state.nodeCount
+        let edgeCount = state.edgeCount
+        let entryCount = state.entryCount
         return try
-            (state.nodeCount != inventoryProjectionNodeCount(in: namespace) || state.edgeCount != inventoryProjectionEdgeCount(in: namespace)
-            || state.entryCount != inventorySearchIndexCount(in: namespace))
+            (nodeCount != inventoryProjectionNodeCount(in: namespace) || edgeCount != inventoryProjectionEdgeCount(in: namespace)
+            || entryCount != inventorySearchIndexCount(in: namespace))
     }
 
     func inventoryProjectionClosure(from seeds: Set<String>, in namespace: PersistenceNamespace) throws -> Set<String> {

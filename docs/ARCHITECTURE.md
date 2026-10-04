@@ -277,12 +277,11 @@ prove authenticity against a malicious archive writer.
 
 `project.yml` is the source of truth for the generated Xcode project. The iOS
 and macOS targets compile the same app source and all eight package products, with
-platform-specific entitlements and unit-test bundles. `Nettwork.xcodeproj`,
+platform-specific entitlements. `Nettwork.xcodeproj`,
 SwiftPM `.build`, DerivedData, test results, and coverage output are generated.
 
-CI runs the source gate and the complete Swift package tests on macOS, then
-generates the Xcode project, runs the macOS app test bundle, and builds the iOS
-Simulator app. These unsigned checks do not verify production signing, live
+CI runs the source gate and the Swift package build on macOS, then
+generates the Xcode project and builds the macOS and iOS Simulator apps. These unsigned checks do not verify production signing, live
 CloudKit, or device-only integrations. The separate Pages workflow validates
 and deploys only `site/`.
 

@@ -56,7 +56,7 @@ module SwiftQuality
       return unless File.file?(package)
 
       files.each do |file|
-        match = relative_path(file).match(%r{\APackages/NettworkCore/(?:Sources|Tests)/([^/]+)/})
+        match = relative_path(file).match(%r{\APackages/NettworkCore/Sources/([^/]+)/})
         mapping[file] << "swiftpm:#{match[1]}" if match
       end
     end

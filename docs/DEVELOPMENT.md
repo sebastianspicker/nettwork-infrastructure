@@ -9,7 +9,7 @@ Development and CI run on macOS. The project declares Swift 6, iOS 18, macOS
 
 | Tool | Used by |
 | --- | --- |
-| Full Xcode, `swift`, and `swiftc` | App generation/builds, package builds/tests, syntax parsing, `plutil`, and `sips` |
+| Full Xcode, `swift`, and `swiftc` | App generation/builds, package builds, syntax parsing, `plutil`, and `sips` |
 | XcodeGen 2.46+ | Generation of `Nettwork.xcodeproj` from `project.yml` |
 | Ruby with YAML and JSON | Project, architecture, and source-quality checks |
 | Git, Bash, `rg`, and `jq` | Repository, script, architecture, and asset checks |
@@ -47,13 +47,13 @@ make generate
 ```
 
 This creates the ignored `Nettwork.xcodeproj`. Regenerate after changing
-targets, schemes, settings, package products, source roots, resources, or test
+targets, schemes, settings, package products, source roots, resources, or
 bundles. Do not manually maintain the generated project.
 
 The generated schemes are:
 
-- `Nettwork`: iOS application and `NettworkTests`
-- `Nettwork macOS`: macOS application and `NettworkMacTests`
+- `Nettwork`: iOS application
+- `Nettwork macOS`: macOS application
 
 ## Validation commands
 
@@ -66,9 +66,9 @@ Run commands from the repository root unless stated otherwise.
 | `make check-format` | Checks Swift formatting (general and production configurations) without modifying files; shell and web formatting are checked by `check-scripts` and `check-web` |
 | `make check-scripts` | Runs Ruby syntax, ShellCheck, shfmt, Bash parsing, and script clone detection |
 | `make check-web` | Checks `site/` with ESLint, Prettier, clone detection, and semantic demo validation |
-| `make verify-source` | CI source gate; does not build app targets or run package/app tests |
-| `make verify-package` | Complete `NettworkCore` Swift package tests with compiler warnings treated as errors |
-| `make verify-native` | Generates the Xcode project, tests the macOS app bundle, and builds the iOS Simulator app without signing |
+| `make verify-source` | CI source gate; does not build package or app targets |
+| `make verify-package` | `NettworkCore` Swift package build with compiler warnings treated as errors |
+| `make verify-native` | Generates the Xcode project, builds the macOS and iOS Simulator apps without signing |
 | `make benchmark` | Release measurements with fixed fixtures; no wall-clock pass/fail thresholds |
 | `make check-architecture` | Exact package dependencies, forbidden imports per target and layer (including attributed and scoped imports), and type-name boundaries between the app layers; requires `rg`, `swift`, and `ruby` |
 | `make check-quality` | Authored-source physical limits plus Swift callable length, complexity, and exact-clone checks |
@@ -88,7 +88,7 @@ For package-only work, either run the root target or work inside the package:
 ```sh
 make verify-package
 cd Packages/NettworkCore
-swift test -Xswiftc -warnings-as-errors
+swift build -Xswiftc -warnings-as-errors
 ```
 
 The authored-source checks limit production Swift files to 380 physical lines,
@@ -97,7 +97,7 @@ Swift test files and HTML/CSS files to 500, JavaScript to 400, Ruby and MJS to
 unwraps, force tries, implicitly unwrapped optionals, and assignment
 expressions.
 
-## Native app builds and tests
+## Native app builds
 
 Run the complete native gate with `make verify-native`. It generates the
 project and puts macOS and iOS build products in separate ignored DerivedData
@@ -116,7 +116,6 @@ The macOS scheme has a stable destination:
 
 ```sh
 xcodebuild -project Nettwork.xcodeproj -scheme 'Nettwork macOS' -destination 'platform=macOS' build
-xcodebuild -project Nettwork.xcodeproj -scheme 'Nettwork macOS' -destination 'platform=macOS' test
 ```
 
 An iOS simulator build does not require a named device:
@@ -125,16 +124,7 @@ An iOS simulator build does not require a named device:
 xcodebuild -project Nettwork.xcodeproj -scheme Nettwork -destination 'generic/platform=iOS Simulator' build
 ```
 
-Tests require a concrete installed simulator. List valid destinations, then use
-one of the reported destination specifiers:
-
-```sh
-xcodebuild -project Nettwork.xcodeproj -scheme Nettwork -showdestinations
-xcodebuild -project Nettwork.xcodeproj -scheme Nettwork -destination 'platform=iOS Simulator,name=<installed iPad>,OS=<installed OS>' test
-xcodebuild -project Nettwork.xcodeproj -scheme Nettwork -destination 'platform=iOS Simulator,name=<installed iPhone>,OS=<installed OS>' test
-```
-
-Application build/test success does not establish production signing,
+Application build success does not establish production signing,
 CloudKit schema/account behavior, camera capture, document workflows, PDF
 printing, or other device integration. Those require the organization setup
 described in [CONFIGURATION.md](CONFIGURATION.md) and proportional device
@@ -204,8 +194,7 @@ is not a native app capture.
   implements in `FeatureContracts`; keep view models, views, and view state in
   `NettworkApp/Presentation`.
 - Put production service behavior (authorization derivation, SwiftData reads,
-  work-order mutation, transfer, evidence binding) in `WorkspaceServices` and
-  cover it with `swift test` in `WorkspaceServicesTests`.
+  work-order mutation, transfer, evidence binding) in `WorkspaceServices`.
 - Put adapters that need UIKit, AppKit, VisionKit, printing, the pasteboard, or
   user-selected files in `NettworkApp/Platform`, behind a `FeatureContracts`
   port.
@@ -223,8 +212,7 @@ is not a native app capture.
 The macOS CI workflow selects a full installed Xcode, installs the locked Node
 toolchain with Node 22, installs ShellCheck, shfmt, and XcodeGen, then runs
 `make verify-source`, `make verify-package`, and `make verify-native`. Native
-coverage includes the macOS application test bundle and an iOS Simulator
-application build. Signing, live CloudKit, and device-only integrations remain
+coverage includes macOS and iOS Simulator application builds. Signing, live CloudKit, and device-only integrations remain
 separate verification requirements.
 
 The separate Pages workflow installs the same locked Node toolchain on Ubuntu,

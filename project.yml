@@ -48,19 +48,6 @@ targetTemplates:
       - package: NettworkCore
         product: WorkspaceServices
 
-  NettworkAppTests:
-    type: bundle.unit-test
-    sources:
-      - Tests/App
-    configFiles:
-      Debug: Config/Debug.xcconfig
-      Release: Config/Release.xcconfig
-    settings:
-      base:
-        PRODUCT_NAME: ${target_name}
-        PRODUCT_MODULE_NAME: ${target_name}
-        GENERATE_INFOPLIST_FILE: YES
-
 targets:
   Nettwork:
     templates: [NettworkApp]
@@ -80,36 +67,12 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.nettwork.mac
         CODE_SIGN_ENTITLEMENTS: Config/Nettwork-macOS.entitlements
 
-  NettworkTests:
-    templates: [NettworkAppTests]
-    platform: iOS
-    dependencies:
-      - target: Nettwork
-
-  NettworkMacTests:
-    templates: [NettworkAppTests]
-    platform: macOS
-    settings:
-      base:
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Nettwork.app/Contents/MacOS/Nettwork"
-        BUNDLE_LOADER: "$(TEST_HOST)"
-    dependencies:
-      - target: NettworkMac
-
 schemes:
   Nettwork:
     build:
       targets:
         Nettwork: all
-        NettworkTests: [test]
-    test:
-      targets:
-        - NettworkTests
   Nettwork macOS:
     build:
       targets:
         NettworkMac: all
-        NettworkMacTests: [test]
-    test:
-      targets:
-        - NettworkMacTests

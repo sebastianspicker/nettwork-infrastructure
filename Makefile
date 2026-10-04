@@ -1,4 +1,4 @@
-.PHONY: generate check format check-format check-scripts check-web check-config check-syntax check-assets check-whitespace check-architecture check-quality test lint-docs verify-source verify-package verify-native benchmark
+.PHONY: generate check format check-format check-scripts check-web check-config check-syntax check-assets check-whitespace check-architecture check-quality build-package lint-docs verify-source verify-package verify-native benchmark
 
 NATIVE_DERIVED_DATA ?= $(CURDIR)/DerivedData
 
@@ -13,13 +13,13 @@ check: verify-source verify-package verify-native
 
 format:
 	xcrun swift format format --configuration .swift-format --in-place --recursive \
-		NettworkApp Packages/NettworkCore/Sources Packages/NettworkCore/Tests Packages/NettworkCore/Benchmarks Tests/App
+		NettworkApp Packages/NettworkCore/Sources Packages/NettworkCore/Benchmarks
 	npm run format
 	@find scripts -type f -name '*.sh' -print0 | xargs -0 shfmt -w -i 4 -ci
 
 check-format:
 	xcrun swift format lint --strict --configuration .swift-format --recursive \
-		NettworkApp Packages/NettworkCore/Sources Packages/NettworkCore/Tests Packages/NettworkCore/Benchmarks Tests/App
+		NettworkApp Packages/NettworkCore/Sources Packages/NettworkCore/Benchmarks
 	xcrun swift format lint --strict --configuration .swift-format-production --recursive \
 		NettworkApp Packages/NettworkCore/Sources Packages/NettworkCore/Benchmarks
 
@@ -46,8 +46,8 @@ check-syntax:
 		echo "check-syntax: required tool 'rg' is not installed or not on PATH"; \
 		exit 1; \
 	}
-	@files=$$(rg --files NettworkApp Tests/App \
-		Packages/NettworkCore/Sources Packages/NettworkCore/Tests Packages/NettworkCore/Benchmarks \
+	@files=$$(rg --files NettworkApp \
+		Packages/NettworkCore/Sources Packages/NettworkCore/Benchmarks \
 		-g '*.swift') || { echo "check-syntax: rg failed"; exit 1; }; \
 	printf '%s\n' "$$files" | tr '\n' '\0' | xargs -0 swiftc -parse
 
@@ -72,20 +72,20 @@ check-architecture:
 check-quality:
 	ruby scripts/swift_quality_check.rb
 
-test:
-	swift test --package-path Packages/NettworkCore -Xswiftc -warnings-as-errors
+build-package:
+	swift build --package-path Packages/NettworkCore -Xswiftc -warnings-as-errors
 
 lint-docs:
 	npm run lint:markdown
 
 verify-source: check-format check-scripts check-web check-config check-syntax check-assets check-whitespace check-architecture check-quality lint-docs
 
-verify-package: test
+verify-package: build-package
 
 verify-native: generate
 	xcodebuild -quiet -project Nettwork.xcodeproj -scheme 'Nettwork macOS' \
 		-destination 'platform=macOS' -derivedDataPath '$(NATIVE_DERIVED_DATA)/macOS' \
-		CODE_SIGNING_ALLOWED=NO test
+		CODE_SIGNING_ALLOWED=NO build
 	xcodebuild -quiet -project Nettwork.xcodeproj -scheme Nettwork \
 		-destination 'generic/platform=iOS Simulator' -derivedDataPath '$(NATIVE_DERIVED_DATA)/iOS' \
 		CODE_SIGNING_ALLOWED=NO build

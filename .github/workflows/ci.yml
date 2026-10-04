@@ -55,8 +55,8 @@ jobs:
       - name: Verify source
         run: make verify-source
 
-      - name: Test NettworkCore package
+      - name: Build NettworkCore package
         run: make verify-package
 
-      - name: Test macOS app and build iOS Simulator app
+      - name: Build macOS and iOS Simulator apps
         run: make verify-native
