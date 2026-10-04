@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import NetworkModel
-import SwiftData
+@preconcurrency import SwiftData
 import WorkspaceChangeControl
 
 public enum NettworkLocalSchema {
