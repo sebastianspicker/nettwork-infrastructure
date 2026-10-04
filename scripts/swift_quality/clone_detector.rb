@@ -211,7 +211,7 @@ module SwiftQuality
     end
 
     def token_count(line)
-      line.scan(/[A-Za-z_]\w*|\d+(?:\.\d+)?|\"(?:\\.|[^\"])*\"|\S/).length
+      line.scan(/[A-Za-z_]\w*|\d+(?:\.\d+)?|\"(?:\\.|[^\"\\])*\"|\S/).length
     end
   end
 end
