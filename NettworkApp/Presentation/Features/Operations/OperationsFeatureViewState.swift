@@ -51,6 +51,22 @@ struct OperationsWorkOrderRow: Identifiable, Equatable, Sendable {
     let title: String
     let status: WorkOrderStatus
     let ticket: String?
+    let reservationExpiresAt: Date?
+    let updatedAt: Date
+    /// Holds resources without a fresh acknowledged reservation.
     let pendingOverlay: Bool
+    /// Holds resources under an unexpired acknowledged reservation.
     let confirmedOverlay: Bool
+
+    init(summary: WorkOrderSummary, now: Date = .now) {
+        id = summary.id
+        title = summary.title
+        status = summary.status
+        ticket = summary.ticket
+        reservationExpiresAt = summary.reservationExpiresAt
+        updatedAt = summary.updatedAt
+        let holdsResources = [.reserved, .approved, .executing, .cancellationRequested].contains(summary.status)
+        confirmedOverlay = holdsResources && summary.reservationExpiresAt.map { now < $0 } == true
+        pendingOverlay = holdsResources && !confirmedOverlay
+    }
 }

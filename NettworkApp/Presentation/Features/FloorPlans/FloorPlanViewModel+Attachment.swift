@@ -51,6 +51,24 @@ extension FloorPlanViewModel {
         }
     }
 
+    /// Imports the file the user picked. Resolving the selection or opening the
+    /// source can fail before the service runs; that is reported, not swallowed.
+    func importPickedAttachment(
+        source open: () throws -> (any OpaqueContentSource)?,
+        authorization: AuthorizedOperationContext,
+        previewAuthorization: @MainActor () -> AuthorizedOperationContext?
+    ) async {
+        let source: any OpaqueContentSource
+        do {
+            guard let opened = try open() else { return }
+            source = opened
+        } catch {
+            assetActionError = error.localizedDescription
+            return
+        }
+        await beginAttachmentImport(source: source, authorization: authorization, previewAuthorization: previewAuthorization)
+    }
+
     func selectPDFPage(_ page: Int, inspection: FloorPlanPDFInspection) {
         selectedPDFPage = min(max(page, 0), inspection.pageCount - 1)
     }

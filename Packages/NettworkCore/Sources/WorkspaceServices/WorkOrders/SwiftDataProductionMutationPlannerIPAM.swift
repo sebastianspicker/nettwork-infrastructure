@@ -20,6 +20,8 @@ extension SwiftDataProductionMutationPlanner {
 
         case let .vlanMembership(memberships):
             try applyVLANMemberships(memberships, snapshot: &snapshot, changes: &changes)
+        case let .create(creation):
+            try applyCreation(creation, snapshot: &snapshot, changes: &changes)
         case .legacyAddressAssignment, .legacyVLANMembership:
             throw ProductionMutationPlannerError.legacyIntentRequiresReconciliation
         }

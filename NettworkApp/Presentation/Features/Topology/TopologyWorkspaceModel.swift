@@ -28,6 +28,8 @@ final class TopologyWorkspaceModel {
     var proposedAction: TopologyDraftAction?
     private(set) var draftValidationMessage: String?
     private(set) var stagedWorkOrderID: ObjectID?
+    private(set) var isStaging = false
+    private(set) var stagingFeedback: InventoryPresentationState?
 
     init(account: AccountContext, browser: any TopologyBrowsing, drafts: any TopologyWorkOrderDrafting) {
         self.account = account
@@ -243,21 +245,27 @@ final class TopologyWorkspaceModel {
     }
 
     func stage(title: String, ticket: String, notes: String) async {
-        guard let action = proposedAction else { return }
-        guard let keys = resourceKeys(for: action) else { return }
+        guard !isStaging else { return }
+        guard let action = proposedAction else {
+            stagingFeedback = .unavailable("Prepare a typed command before staging a work-order draft.")
+            return
+        }
+        guard let keys = resourceKeys(for: action) else {
+            stagingFeedback = .unavailable(draftValidationMessage ?? "The proposed change has no complete resource set.")
+            return
+        }
+        isStaging = true
+        defer { isStaging = false }
         do {
-            stagedWorkOrderID = try await drafts.stage(
-                TopologyWorkOrderRequest(
-                    title: title,
-                    ticket: ticket,
-                    notes: notes,
-                    action: action,
-                    resourceKeys: keys
-                ),
-                in: account.namespace
-            )
-            state = .pending("A topology operation was staged in a work-order draft. No authoritative topology was changed.")
-        } catch { state = .conflict("The draft could not reserve its proposed resource set.") }
+            let request = TopologyWorkOrderRequest(title: title, ticket: ticket, notes: notes, action: action, resourceKeys: keys)
+            let workOrderID = try await drafts.stage(request, in: account.namespace)
+            stagedWorkOrderID = workOrderID
+            proposedAction = nil
+            stagingFeedback = .pending("Staged in work order \(workOrderID.description). No authoritative topology was changed.")
+        } catch {
+            stagingFeedback = StagingFailurePresentation.state(
+                for: error, conflictMessage: "The draft could not reserve its proposed resource set.")
+        }
     }
 
     private func matches(_ port: TopologyPortSnapshot) -> Bool {

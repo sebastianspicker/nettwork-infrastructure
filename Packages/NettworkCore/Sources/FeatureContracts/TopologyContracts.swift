@@ -201,10 +201,14 @@ public struct RackElevationSnapshot: Identifiable, Sendable {
     public let faceName: String
     public let entries: [RackElevationEntrySnapshot]
     public let ports: [TopologyPortSnapshot]
+    /// True for the synthetic group that carries ports of devices without a
+    /// rack (wall outlets, patch panels, room equipment). `rackID` is then a
+    /// stable placeholder and must not be treated as a real rack.
+    public let isUnracked: Bool
 
     public init(
         id: String, rackID: ObjectID, assetCode: AssetCode, heightRU: Int, faceName: String,
-        entries: [RackElevationEntrySnapshot], ports: [TopologyPortSnapshot]
+        entries: [RackElevationEntrySnapshot], ports: [TopologyPortSnapshot], isUnracked: Bool = false
     ) {
         self.id = id
         self.rackID = rackID
@@ -213,5 +217,6 @@ public struct RackElevationSnapshot: Identifiable, Sendable {
         self.faceName = faceName
         self.entries = entries
         self.ports = ports
+        self.isUnracked = isUnracked
     }
 }

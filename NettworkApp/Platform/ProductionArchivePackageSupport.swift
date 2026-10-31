@@ -79,6 +79,12 @@ final class ProductionArchivePackageEntryReader: ArchiveEntryReader, @unchecked 
     deinit { try? handle.close() }
 
     func nextChunk() throws -> Data? {
+        try nextChunk(maximumBytes: chunkSize)
+    }
+
+    /// Reads at most `maximumBytes` (and never more than the configured chunk
+    /// size) so callers with their own bound can share this exact-size reader.
+    func nextChunk(maximumBytes: Int) throws -> Data? {
         lock.lock()
         defer { lock.unlock() }
         guard !isFinished else { return nil }
@@ -96,7 +102,7 @@ final class ProductionArchivePackageEntryReader: ArchiveEntryReader, @unchecked 
             return nil
         }
 
-        let chunk = try handle.read(upToCount: min(chunkSize, remaining)) ?? Data()
+        let chunk = try handle.read(upToCount: min(chunkSize, maximumBytes, remaining)) ?? Data()
         guard !chunk.isEmpty, chunk.count <= remaining else {
             throw ProductionArchiveDocumentAdapterError.unsafePackageEntry("archive payload")
         }

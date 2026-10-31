@@ -162,6 +162,7 @@ struct WorkOrderValidationSection: View {
                 .accessibilityIdentifier("work-order.refresh-reservation")
             }
         }
+        WorkOrderReservationRecoverySection(model: model)
     }
 }
 
@@ -207,7 +208,7 @@ private struct WorkOrderReservationSummary: View {
                 Label("Reservation confirmed until \(reservation.expiresAt.formatted(date: .omitted, time: .shortened))", systemImage: "checkmark.seal")
                     .foregroundStyle(NettworkStatusRole.reserved.color)
             case .expired:
-                Label("Reservation expired. Refresh before execution.", systemImage: "clock.badge.xmark")
+                Label("Reservation expired. Release it, then reserve a fresh copy.", systemImage: "clock.badge.xmark")
                     .foregroundStyle(NettworkStatusRole.conflict.color)
             case .rejected(let reason):
                 Label(reason, systemImage: "xmark.octagon")

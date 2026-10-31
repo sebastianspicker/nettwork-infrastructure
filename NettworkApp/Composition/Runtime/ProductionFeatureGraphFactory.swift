@@ -65,7 +65,9 @@ extension ProductionFeatureGraphFactory {
         _ input: ProductionFeatureGraphInput,
         services: ProductionFeatureGraphServices
     ) -> ProductionFeatureGraphModels {
-        let inventory = InventoryExploreModel(account: input.account, queryService: services.reads, historyStore: ScopedInventoryHistoryAdapter())
+        let inventory = InventoryExploreModel(
+            account: input.account, queryService: services.reads,
+            historyStore: PersistentInventoryHistoryStore(directory: input.historyDirectory))
         let topology = TopologyWorkspaceModel(account: input.account, browser: services.reads, drafts: services.drafts)
         let trace = TraceInspectionModel(
             account: input.account, service: services.reads, identifierCopier: ProductionTraceIdentifierCopier(),

@@ -150,7 +150,7 @@ public struct ContentSafetyService: Sendable {
     }
 
     public static func digest(for bytes: Data, purpose: ContentPurpose) -> String {
-        let domain = Data("netzwerkdoku.content-safety.sanitized.v1\\0\(purpose.rawValue)\\0".utf8)
+        let domain = Data("netzwerkdoku.content-safety.sanitized.v1\0\(purpose.rawValue)\0".utf8)
         return SHA256.hash(data: domain + bytes).map { String(format: "%02x", $0) }.joined()
     }
 

@@ -64,6 +64,8 @@ private enum ProductionResourceKeyProjection {
             return addressAssignments(assignments)
         case .vlanMembership(let memberships):
             return vlanMemberships(memberships)
+        case .create(let creation):
+            return creation.resourceKeys
         case let .legacyAddressAssignment(addressKey, interfaceID):
             return [addressKey, .object(interfaceID)]
         case let .legacyVLANMembership(interfaceID, vlanID, _):

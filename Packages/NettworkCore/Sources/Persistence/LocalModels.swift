@@ -105,6 +105,12 @@ public struct LocalQuarantineRecord: Codable, Hashable, Sendable, Identifiable {
         self.failure = failure
         self.capturedAt = capturedAt
     }
+
+    /// The same rejected input in the same namespace, ignoring when it was captured.
+    func isSameRejection(as other: LocalQuarantineRecord) -> Bool {
+        namespace == other.namespace && resourceKey == other.resourceKey && recordType == other.recordType && payload == other.payload
+            && failure.category == other.failure.category && failure.message == other.failure.message
+    }
 }
 
 public enum LocalRecordKind {

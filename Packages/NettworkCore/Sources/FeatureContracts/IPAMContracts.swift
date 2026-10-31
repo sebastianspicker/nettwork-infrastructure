@@ -96,6 +96,7 @@ public struct IPAMAddressSnapshot: Identifiable, Equatable, Sendable {
 
 public struct VLANSnapshot: Identifiable, Equatable, Sendable {
     public let id: ObjectID
+    public let groupID: ObjectID
     public let groupName: String
     public let number: Int
     public let name: String
@@ -105,10 +106,11 @@ public struct VLANSnapshot: Identifiable, Equatable, Sendable {
     public let isConflicted: Bool
 
     public init(
-        id: ObjectID, groupName: String, number: Int, name: String, state: IPAMRecordState,
+        id: ObjectID, groupID: ObjectID, groupName: String, number: Int, name: String, state: IPAMRecordState,
         isPlanned: Bool, isPending: Bool, isConflicted: Bool
     ) {
         self.id = id
+        self.groupID = groupID
         self.groupName = groupName
         self.number = number
         self.name = name
@@ -175,6 +177,24 @@ public enum IPAMWorkOrderOperation: Equatable, Sendable {
     case prefixLayout(PrefixLayoutWorkOrderRequest)
     case addressAssignment(InterfaceAddressAssignmentSet)
     case vlanMembership(InterfaceVLANMembershipSet)
+    /// Creation requests use `perVRFRevisionKey` as the creation scope: the
+    /// new VRF itself, the address's VRF, or the VLAN's group.
+    case createVRF(VRF)
+    case createAddressRecord(IPAddressRecord)
+    case createVLAN(VLAN, newGroup: VLANGroup?)
+}
+
+extension IPAMWorkOrderOperation {
+    /// The planned creation carried by a creation request, or `nil` for
+    /// prefix-layout and relationship-set requests.
+    public var plannedCreation: PlannedIPAMCreation? {
+        switch self {
+        case .prefixLayout, .addressAssignment, .vlanMembership: nil
+        case .createVRF(let vrf): .vrf(vrf)
+        case .createAddressRecord(let address): .addressRecord(address)
+        case let .createVLAN(vlan, newGroup): .vlan(vlan, newGroup: newGroup)
+        }
+    }
 }
 
 public struct IPAMWorkOrderRequest: Equatable, Sendable {

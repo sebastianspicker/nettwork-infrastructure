@@ -62,6 +62,8 @@
     public protocol CloudKitSyncEngineDriver: Sendable {
         func ensureSubscription(in database: CKDatabase, namespace: PersistenceNamespace) async throws
         func fetchChanges(in database: CKDatabase, namespace: PersistenceNamespace, persistedState: Data?) async throws -> CloudChangeBatch
+        /// Releases a fetched state the mirror never committed; other states are ignored.
+        func discardFetchedState(_ state: Data, in namespace: PersistenceNamespace) async
     }
 
     /// The platform-specific `CKSyncEngine` delegate belongs behind this narrow
@@ -77,6 +79,9 @@
     public protocol CloudKitSyncEngineBatchSource: Sendable {
         func ensureSubscription(in database: CKDatabase, namespace: PersistenceNamespace) async throws
         func fetchChanges(in database: CKDatabase, namespace: PersistenceNamespace, persistedState: Data?) async throws -> CloudChangeBatch
+        /// Forgets an uncommitted fetched state so the next fetch restarts from
+        /// the last durably applied state instead of the engine's in-memory cursor.
+        func discardFetchedState(_ state: Data, in namespace: PersistenceNamespace) async
     }
 
     public enum CloudKitSyncEngineStateError: Error, Hashable, Sendable {
@@ -90,12 +95,13 @@
     ///
     /// It has one deliberate failure mode: after a batch has been fetched, no
     /// later engine fetch is allowed until `CloudMirrorStore` has committed that
-    /// exact state and `persistAppliedState` acknowledges it. This prevents an
+    /// exact state and `persistAppliedState` acknowledges it, or the caller
+    /// discards that exact state after rejecting the batch. This prevents an
     /// uncommitted engine cursor from being advanced or overwritten after a crash.
     public actor CloudKitStatefulSyncEngineDriver: CloudKitSyncEngineDriver, CloudKitSyncEngineStateStore {
         private let source: any CloudKitSyncEngineBatchSource
         private let durableState: any CloudKitSyncEngineStateStore
-        private var pendingStateByNamespace: [PersistenceNamespace: Data] = [:]
+        private var pendingStates = CloudKitPendingFetchedStates()
 
         public init(source: any CloudKitSyncEngineBatchSource, durableState: any CloudKitSyncEngineStateStore) {
             self.source = source
@@ -111,20 +117,21 @@
         }
 
         public func fetchChanges(in database: CKDatabase, namespace: PersistenceNamespace, persistedState: Data?) async throws -> CloudChangeBatch {
-            guard pendingStateByNamespace[namespace] == nil else {
-                throw CloudKitSyncEngineStateError.fetchedStateAwaitingMirrorCommit(namespace)
-            }
+            try pendingStates.requireNoPendingState(in: namespace)
             let batch = try await source.fetchChanges(in: database, namespace: namespace, persistedState: persistedState)
-            pendingStateByNamespace[namespace] = batch.newState
+            try pendingStates.record(batch.newState, in: namespace)
             return batch
         }
 
         public func persistAppliedState(_ state: Data, in namespace: PersistenceNamespace) async throws {
-            guard let pending = pendingStateByNamespace[namespace], pending == state else {
-                throw CloudKitSyncEngineStateError.appliedStateDoesNotMatchFetchedState(namespace)
-            }
+            try pendingStates.requirePendingState(state, in: namespace)
             try await durableState.persistAppliedState(state, in: namespace)
-            pendingStateByNamespace[namespace] = nil
+            pendingStates.acknowledge(state, in: namespace)
+        }
+
+        public func discardFetchedState(_ state: Data, in namespace: PersistenceNamespace) async {
+            guard pendingStates.discard(state, in: namespace) else { return }
+            await source.discardFetchedState(state, in: namespace)
         }
     }
 

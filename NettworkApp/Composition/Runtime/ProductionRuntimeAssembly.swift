@@ -12,6 +12,10 @@ import WorkspaceServices
 enum ProductionRuntimeAssemblyError: LocalizedError {
     case verifiedAccountMismatch
     case invalidConfiguration(String)
+    case localNamespaceOnCloudKitBackend
+    case localBackendRequiresLocalNamespace
+    case localBackendRequiresOwnerPrivateScope
+    case localBackendRejectsStagedTransferGC
 
     var errorDescription: String? {
         switch self {
@@ -19,6 +23,14 @@ enum ProductionRuntimeAssemblyError: LocalizedError {
             "The verified CloudKit account no longer matches the assembled workspace."
         case .invalidConfiguration(let field):
             "The production runtime configuration is invalid: \(field)."
+        case .localNamespaceOnCloudKitBackend:
+            "A reserved local container identifier cannot be used with the CloudKit backend."
+        case .localBackendRequiresLocalNamespace:
+            "The local backend requires a container identifier with the reserved local prefix."
+        case .localBackendRequiresOwnerPrivateScope:
+            "The local backend requires an owner-private database scope and owner permission."
+        case .localBackendRejectsStagedTransferGC:
+            "The local backend does not support staged-transfer garbage collection."
         }
     }
 }

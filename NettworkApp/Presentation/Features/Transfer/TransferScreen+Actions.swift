@@ -8,8 +8,30 @@ import WorkspaceChangeControl
 
 extension TransferScreen {
     func beginDryRun() {
-        guard let document = importDocument?(), let context = importAuthorization?() else { return }
-        Task { await model.dryRunCSV(source: document, authorization: context) }
+        guard let context = importAuthorization?() else { return }
+        if let document = importDocument?() {
+            Task { await model.dryRunCSV(source: document, authorization: context) }
+        } else if csvPackageSource != nil {
+            importsCSVSelection = true
+            isImporterPresented = true
+        }
+    }
+
+    var canReviewCSVImport: Bool {
+        (importDocument != nil || csvPackageSource != nil) && importAuthorization != nil && model.canBeginCSVDryRun
+    }
+
+    func completeImportSelection(_ result: Result<[URL], Error>) {
+        if importsCSVSelection {
+            selectCSVForDryRun(result)
+        } else {
+            selectArchiveForRestore(result)
+        }
+    }
+
+    func selectCSVForDryRun(_ result: Result<[URL], Error>) {
+        guard let context = importAuthorization?(), let csvPackageSource else { return }
+        Task { await model.dryRunSelectedCSVPackage(result, open: csvPackageSource, authorization: context) }
     }
 
     func activateImport(_ plan: ImportPlan) {
@@ -88,7 +110,8 @@ extension TransferScreen {
         if let source = restoreSource?() {
             verifyRestore(source: source)
         } else {
-            isArchiveImporterPresented = true
+            importsCSVSelection = false
+            isImporterPresented = true
         }
     }
 
@@ -127,7 +150,8 @@ extension TransferScreen {
                     try NettworkArchiveDocument.publish(document, to: url)
                     archiveSaveMessage = "Archive saved to the selected location."
                 } catch {
-                    archiveSaveMessage = error.localizedDescription
+                    NettworkArchiveDocument.discardUnpublishedPlaceholder(at: url)
+                    archiveSaveMessage = "The archive was not saved. \(error.localizedDescription)"
                 }
             }
         case .failure(let error):

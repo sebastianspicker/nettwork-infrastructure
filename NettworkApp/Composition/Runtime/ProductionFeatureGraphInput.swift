@@ -14,6 +14,7 @@ struct ProductionFeatureGraphInput {
     let persistence: SwiftDataPersistenceStore
     let currentAuthorizationContext: any CurrentAuthorizationContextProviding
     let operationBoundary: ProductionOperationBoundary
+    let historyDirectory: URL
     let mutations: any ProductionFeatureMutationAuthorizing
     let synchronizer: any ProductionForegroundSynchronizing
     let workspaceAccess: any ProductionWorkspaceAccessReading
@@ -42,6 +43,7 @@ struct ProductionFeatureGraphInput {
         persistence: SwiftDataPersistenceStore,
         currentAuthorizationContext: any CurrentAuthorizationContextProviding,
         operationBoundary: ProductionOperationBoundary,
+        historyDirectory: URL,
         authorities: ProductionOrganizationAuthorities,
         floorPlanService: any FloorPlanFeatureService,
         transferService: any TransferFeatureService,
@@ -64,6 +66,7 @@ struct ProductionFeatureGraphInput {
         self.persistence = persistence
         self.currentAuthorizationContext = currentAuthorizationContext
         self.operationBoundary = operationBoundary
+        self.historyDirectory = historyDirectory
         self.mutations = authorities.mutations
         self.synchronizer = authorities.synchronizer
         self.workspaceAccess = authorities.workspaceAccess

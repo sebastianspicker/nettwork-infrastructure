@@ -64,11 +64,15 @@ struct MirrorProjection {
     let plannedResourceKeys: Set<ResourceKey>
     let pendingResourceKeys: Set<ResourceKey>
     let conflictResourceKeys: Set<ResourceKey>
+    /// Records skipped by the read-path quarantine; always 0 for strict builds.
+    let quarantinedRecordCount: Int
 
     init(
-        records: [LocalMirrorRecord], conflicts: [ReconciliationCase], conflictResourceKeys: Set<ResourceKey>, conflictCount: Int, syncState: LocalSyncState?
+        records: [LocalMirrorRecord], conflicts: [ReconciliationCase], conflictResourceKeys: Set<ResourceKey>, conflictCount: Int, syncState: LocalSyncState?,
+        quarantinedRecordCount: Int = 0
     ) throws {
         try Task.checkCancellation()
+        self.quarantinedRecordCount = quarantinedRecordCount
         self.records = records
         let normalized = try ProductionMirrorDomainProjection(records: records)
         topology = normalized.topology

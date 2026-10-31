@@ -13,6 +13,7 @@ extension ProductionFeatureMutationAuthority {
         let issues = structuralIssues(for: draft) + (try await semanticValidator.issues(for: draft, in: namespace))
         guard issues.isEmpty else { throw ProductionFeatureMutationAuthorityError.invalidDraft(issues) }
         let material = try reservationMaterial(for: draft, trusted: trusted)
+        if let resumed = try await resumedReservation(material, authorization: authorization, namespace: namespace) { return resumed }
         try await commitReservation(material, trusted: trusted, namespace: namespace)
         return try await acknowledgeReservation(material, authorization: authorization, namespace: namespace)
     }
@@ -148,16 +149,7 @@ extension ProductionFeatureMutationAuthority {
         else {
             throw ProductionFeatureMutationAuthorityError.cancellationNotRequested
         }
-        let confirmation: WorkOrderReservationPresentation.Confirmation
-        if let acknowledgement = updated.reservation?.acknowledgedByCloudKit {
-            confirmation =
-                Date.now < acknowledgement.expiresAt
-                ? .confirmed
-                : .expired
-        } else {
-            confirmation = .pending
-        }
-        return presentation(for: updated, confirmation: confirmation)
+        return presentation(for: updated, confirmation: reservationConfirmation(of: updated))
     }
 
     public func resolveCancellation(
@@ -213,7 +205,7 @@ extension ProductionFeatureMutationAuthority {
         let draft = try await correctiveBuilder.correctiveDraft(for: reconciliationID, actorID: trusted.actor.cloudKitUserRecordName, in: namespace)
         try requireStructurallyValid(draft)
         try await sessionAuthorizer.revalidate(trusted)
-        await draftStore.store(draft, in: namespace)
+        try await draftStore.store(draft, in: namespace)
         return draft.id
     }
 }

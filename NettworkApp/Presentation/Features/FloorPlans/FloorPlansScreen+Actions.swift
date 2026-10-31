@@ -5,10 +5,25 @@ import WorkspaceChangeControl
 
 extension FloorPlansScreen {
     func requestAttachmentImport() {
-        guard let source = importSource?(), let context = attachmentAuthorization?() else { return }
+        guard let context = attachmentAuthorization?() else { return }
+        if let source = importSource?() {
+            Task {
+                await model.beginAttachmentImport(
+                    source: source,
+                    authorization: context,
+                    previewAuthorization: { previewAuthorization?() }
+                )
+            }
+        } else if pickedContent != nil {
+            isAttachmentImporterPresented = true
+        }
+    }
+
+    func selectAttachmentForImport(_ result: Result<[URL], Error>) {
+        guard let context = attachmentAuthorization?(), let pickedContent else { return }
         Task {
-            await model.beginAttachmentImport(
-                source: source,
+            await model.importPickedAttachment(
+                source: { try PickedContentSources.openSelection(result, open: pickedContent.file) },
                 authorization: context,
                 previewAuthorization: { previewAuthorization?() }
             )

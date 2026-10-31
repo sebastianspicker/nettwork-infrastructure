@@ -57,11 +57,33 @@ public actor CloudForegroundSyncCoordinator: SyncCoordinator {
         )
     }
 
-    private func synchronize(started: Date, account context: AccountContext, lease: CloudSessionLease) async -> SyncReceipt {
+    private struct IngestProgress {
         var appliedRecordCount = 0
         var appliedAssetCount = 0
+        var committed = false
+    }
+
+    /// Every fetched batch either commits in one mirror transaction or has its
+    /// uncommitted change state discarded, so a rejected, quarantined, or
+    /// superseded batch is fetched again from the last durably applied state
+    /// instead of wedging all later fetches.
+    private func synchronize(started: Date, account context: AccountContext, lease: CloudSessionLease) async -> SyncReceipt {
+        let batch: CloudChangeBatch
         do {
-            let batch = try await transport.fetchChanges()
+            batch = try await transport.fetchChanges()
+        } catch {
+            return await failedSyncReceipt(started: started, account: context, lease: lease, error: error, downloadedRecordCount: 0, downloadedAssetCount: 0)
+        }
+        var progress = IngestProgress()
+        let receipt = await ingest(batch, started: started, account: context, lease: lease, progress: &progress)
+        if !progress.committed { await discardFetchedChangeState(batch.newState) }
+        return receipt
+    }
+
+    private func ingest(
+        _ batch: CloudChangeBatch, started: Date, account context: AccountContext, lease: CloudSessionLease, progress: inout IngestProgress
+    ) async -> SyncReceipt {
+        do {
             guard await session.isCurrent(lease) else {
                 return SyncReceipt(
                     startedAt: started, finishedAt: .now,
@@ -89,29 +111,41 @@ public actor CloudForegroundSyncCoordinator: SyncCoordinator {
                     failures: [SyncFailure(category: .accountUnavailable, message: "Cloud account changed during remote validation.")])
             }
             try await mirror.applyVerifiedBatch(verified, syncState: batch.newState, namespace: context.namespace)
-            appliedRecordCount = verified.count
-            appliedAssetCount = verified.lazy.filter { $0.envelope.recordAsset != nil }.count
+            progress.committed = true
+            progress.appliedRecordCount = verified.count
+            progress.appliedAssetCount = verified.lazy.filter { $0.envelope.recordAsset != nil }.count
             try await persistAppliedChangeState(batch.newState)
-            guard await session.isCurrent(lease) else {
-                return SyncReceipt(
-                    startedAt: started, finishedAt: .now, downloadedRecordCount: appliedRecordCount, downloadedAssetCount: appliedAssetCount,
-                    failures: [
-                        SyncFailure(
-                            category: .accountUnavailable,
-                            message: "Cloud account changed after local transaction.")
-                    ])
-            }
-            let replay = try await replayForegroundOutbox(account: context, lease: lease)
-            let status = try await mirror.syncStatus(namespace: context.namespace)
-            return receipt(
-                started: started, uploadedOperationIDs: replay.uploadedOperationIDs,
-                downloadedRecordCount: appliedRecordCount, downloadedAssetCount: appliedAssetCount,
-                failures: replay.failures, status: status)
+            return try await committedReceipt(started: started, account: context, lease: lease, progress: progress)
         } catch {
             return await failedSyncReceipt(
                 started: started, account: context, lease: lease, error: error,
-                downloadedRecordCount: appliedRecordCount, downloadedAssetCount: appliedAssetCount)
+                downloadedRecordCount: progress.appliedRecordCount, downloadedAssetCount: progress.appliedAssetCount)
         }
+    }
+
+    private func committedReceipt(started: Date, account context: AccountContext, lease: CloudSessionLease, progress: IngestProgress) async throws
+        -> SyncReceipt
+    {
+        guard await session.isCurrent(lease) else {
+            return SyncReceipt(
+                startedAt: started, finishedAt: .now, downloadedRecordCount: progress.appliedRecordCount, downloadedAssetCount: progress.appliedAssetCount,
+                failures: [
+                    SyncFailure(
+                        category: .accountUnavailable,
+                        message: "Cloud account changed after local transaction.")
+                ])
+        }
+        let replay = try await replayForegroundOutbox(account: context, lease: lease)
+        let status = try await mirror.syncStatus(namespace: context.namespace)
+        return receipt(
+            started: started, uploadedOperationIDs: replay.uploadedOperationIDs,
+            downloadedRecordCount: progress.appliedRecordCount, downloadedAssetCount: progress.appliedAssetCount,
+            failures: replay.failures, status: status)
+    }
+
+    private func discardFetchedChangeState(_ state: Data) async {
+        guard let discarding = transport as? any CloudFetchedChangeStateDiscarding else { return }
+        await discarding.discardFetchedChangeState(state)
     }
 
     private func persistAppliedChangeState(_ state: Data) async throws {

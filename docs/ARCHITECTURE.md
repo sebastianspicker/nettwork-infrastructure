@@ -307,8 +307,12 @@ policy values outside reusable package modules.
 
 ## Scope and limitations
 
-- The repository does not provide a standalone server or a fallback local-only
-  production mode.
+- The repository does not provide a standalone server. The default build has
+  no fallback local-only mode; the separate `Release Alpha Local` build
+  configuration selects the stage-1 local runtime (`LocalRuntimeOrganizationInputProvider`
+  in `NettworkApp/Composition/Runtime`), which runs fully offline against a
+  durable on-device record store with a single local administrator and no
+  sharing. See [Production configuration](CONFIGURATION.md#alpha-local-runtime).
 - The static demo is not a simulator, data migration tool, or service client.
 - The local mirror is not an independent authority and must not outlive its
   account-scoped lease.

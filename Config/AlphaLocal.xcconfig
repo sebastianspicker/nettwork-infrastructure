@@ -1,0 +1,6 @@
+// Stage-1 alpha: a Release build that runs fully offline against the durable
+// local runtime (single local administrator, no CloudKit, no sharing).
+// Release-based because testers install a Release-like build.
+#include "Release.xcconfig"
+
+NETTWORK_PRODUCTION_CONFIGURATION_PROVIDER = NettworkLocalRuntimeProvider

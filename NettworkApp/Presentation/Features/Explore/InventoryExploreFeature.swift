@@ -137,6 +137,13 @@ final class InventoryExploreModel {
         await refreshHistoryResults(in: scope, generation: generation)
     }
 
+    /// A model over the same account and query service whose query, results,
+    /// selection and history are independent of this one, so a secondary
+    /// picker (such as Trace) cannot change Explore's filters or recents.
+    func isolatedSearchModel() -> InventoryExploreModel {
+        InventoryExploreModel(account: account, queryService: queryService, historyStore: DiscardingInventoryHistoryStore())
+    }
+
     func replaceAccount(_ account: AccountContext) {
         searchGeneration &+= 1
         selectionGeneration &+= 1
@@ -191,4 +198,13 @@ final class InventoryExploreModel {
         var seen = Set<ObjectID>()
         return ids.filter { seen.insert($0).inserted }
     }
+}
+
+/// History sink for isolated pickers: selections are neither remembered nor
+/// favourited, so they never leak into the shared Explore history.
+private struct DiscardingInventoryHistoryStore: InventoryHistoryStoring {
+    func recent(in scope: InventoryAccountScope) async -> [ObjectID] { [] }
+    func favorites(in scope: InventoryAccountScope) async -> Set<ObjectID> { [] }
+    func recordRecent(_ id: ObjectID, in scope: InventoryAccountScope) async {}
+    func toggleFavorite(_ id: ObjectID, in scope: InventoryAccountScope) async -> Set<ObjectID> { [] }
 }

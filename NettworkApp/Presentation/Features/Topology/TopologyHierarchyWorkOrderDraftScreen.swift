@@ -63,10 +63,11 @@ struct TopologyHierarchyWorkOrderDraftScreen: View {
                 Task { await model.stage(title: title, ticket: ticket, notes: notes) }
             }
             .disabled(
-                model.proposedAction == nil || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                model.proposedAction == nil || model.isStaging || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     || ticket.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             )
             .accessibilityIdentifier("topology.stageHierarchyWorkOrder")
+            TopologyStagingFeedback(model: model)
         }
         .navigationTitle("Stage hierarchy work")
     }

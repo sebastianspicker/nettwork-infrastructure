@@ -26,13 +26,22 @@ extension OperationsFeatureViewModel {
     }
 
     func selectStagedDraft(_ id: ObjectID) {
-        guard let staged = stagedDrafts.first(where: { $0.id == id }) else { return }
+        guard let staged = stagedDrafts.first(where: { $0.id == id }),
+            !(isWorkOrderFinished && id == draft.id)
+        else { return }
         guard canSelectStagedDraft else {
             fail("Finish or cancel the current reserved/evidence workflow before selecting another staged draft.")
             return
         }
+        if isWorkOrderFinished {
+            let finishedID = draft.id
+            reservation = nil
+            evidenceItems = []
+            stagedDrafts.removeAll { $0.id == finishedID }
+        }
         draft = staged
         validation = .unvalidated
+        isReleasedWorkOrder = false
         phase = .editing
         phaseBeforeFailure = nil
         lastError = nil
@@ -281,6 +290,7 @@ extension OperationsFeatureViewModel {
                 releaseAuthorization: releaseAuthorization,
                 authorization: authorization
             )
+            isReleasedWorkOrder = true
             phase = .completed
             lastError = nil
         } catch {

@@ -56,6 +56,24 @@ extension TransferFeatureViewModel {
         }
     }
 
+    /// Starts a dry run for a CSV folder or `.nettworkcsv` package the user
+    /// picked. The opened source is owned, and eventually closed, by the dry run.
+    func dryRunSelectedCSVPackage(
+        _ selection: Result<[URL], Error>,
+        open: (URL) throws -> any CSVImportSource,
+        authorization: AuthorizedOperationContext
+    ) async {
+        let source: any CSVImportSource
+        do {
+            guard let url = try selection.get().first else { throw CSVWorkspaceDocumentError.noSelection }
+            source = try open(url)
+        } catch {
+            reportCSVFailure(error.localizedDescription)
+            return
+        }
+        await dryRunCSV(source: source, authorization: authorization)
+    }
+
     func activateCSV(expectedPlan: ImportPlan) async {
         guard case let .awaitingActivation(displayedPlan) = csvState,
             displayedPlan == expectedPlan,

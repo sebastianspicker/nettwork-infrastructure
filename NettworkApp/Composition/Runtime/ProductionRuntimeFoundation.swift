@@ -1,5 +1,6 @@
 import CloudSync
 import Foundation
+import OSLog
 import Persistence
 import WorkspaceServices
 
@@ -11,7 +12,7 @@ struct ProductionRuntimeFoundation {
     let lifecycle: CloudSessionLifecycle
     let stateStore: SwiftDataCloudKitSyncEngineStateStore
     let identityIndex: SwiftDataCloudRecordNameIdentityIndex
-    let workspaceAuthority: CloudKitWorkspaceAuthority
+    let workspaceAuthority: any CloudWorkspaceAuthority
     let sessionAuthorizer: ProductionSessionAuthorizer
     let activateWorkspace: () async throws -> Void
     let invalidateWorkspace: () async -> Void
@@ -47,12 +48,7 @@ extension ProductionRuntimeAssembly {
             namespace: input.cloudWorkspace.account.namespace,
             maximumEntries: input.cloudWorkspace.maximumRecordNameIdentities
         )
-        let workspaceAuthority = CloudKitWorkspaceAuthority(
-            container: input.cloudWorkspace.cloudKitContainer,
-            contextStore: input.cloudWorkspace.workspaceContextStore,
-            shareService: input.cloudWorkspace.workspaceShareService,
-            bootstrapper: input.cloudWorkspace.workspaceBootstrapper
-        )
+        let workspaceAuthority = makeWorkspaceAuthority(input.cloudWorkspace.backend)
         let sessionAuthorizer = ProductionSessionAuthorizer(
             lifecycle: lifecycle,
             workspaceAuthority: workspaceAuthority,
@@ -77,6 +73,20 @@ extension ProductionRuntimeAssembly {
         )
     }
 
+    private static func makeWorkspaceAuthority(_ backend: OrganizationInput.CloudWorkspace.Backend) -> any CloudWorkspaceAuthority {
+        switch backend {
+        case .cloudKit(let cloudKit):
+            CloudKitWorkspaceAuthority(
+                container: cloudKit.cloudKitContainer,
+                contextStore: cloudKit.workspaceContextStore,
+                shareService: cloudKit.workspaceShareService,
+                bootstrapper: cloudKit.workspaceBootstrapper
+            )
+        case .local(let local):
+            local.workspaceAuthority
+        }
+    }
+
     private static func makeWorkspaceActivation(
         _ input: OrganizationInput, telemetry: ProductionOSLogSyncTelemetry, lifecycle: CloudSessionLifecycle,
         authorizer: ProductionSessionAuthorizer, identityIndex: SwiftDataCloudRecordNameIdentityIndex
@@ -91,7 +101,9 @@ extension ProductionRuntimeAssembly {
                 emitAccountLifecycle(.succeeded, input: input, telemetry: telemetry)
             } catch {
                 await lifecycle.invalidateCurrentSession()
-                emitAccountLifecycle(.failed, input: input, telemetry: telemetry)
+                Logger(subsystem: input.cloudWorkspace.telemetrySubsystem, category: "workspace.activation")
+                    .error("activation failed: \(PrivacySafeErrorDiagnostics.label(for: error), privacy: .public)")
+                emitAccountLifecycle(.failed, failure: PrivacySafeErrorDiagnostics.telemetryFailureCategory(for: error), input: input, telemetry: telemetry)
                 throw error
             }
         }
@@ -106,8 +118,10 @@ extension ProductionRuntimeAssembly {
         }
     }
 
-    private static func emitAccountLifecycle(_ outcome: PrivacySafeSyncTelemetryOutcome, input: OrganizationInput, telemetry: ProductionOSLogSyncTelemetry) {
-        let failure: PrivacySafeSyncTelemetryFailureCategory? = outcome == .failed ? .accountUnavailable : nil
+    private static func emitAccountLifecycle(
+        _ outcome: PrivacySafeSyncTelemetryOutcome, failure: PrivacySafeSyncTelemetryFailureCategory? = nil, input: OrganizationInput,
+        telemetry: ProductionOSLogSyncTelemetry
+    ) {
         telemetry.emit(
             PrivacySafeSyncTelemetryEvent(
                 operation: .accountLifecycle, outcome: outcome, recordCount: 0, assetCount: 0,

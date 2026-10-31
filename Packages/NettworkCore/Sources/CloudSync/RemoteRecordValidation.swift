@@ -188,6 +188,9 @@ public enum CloudRemoteQuarantineSelection {
 public enum CloudFailureClassifier {
     public static func classify(_ error: Error) -> SyncFailure {
         if let transport = error as? CloudTransportFailure { return transport.failure }
+        if let unavailable = error as? CloudVerificationUnavailableError {
+            return SyncFailure(category: unavailable.failureCategory, message: unavailable.localizedDescription, retryAfter: unavailable.retryAfter)
+        }
         return SyncFailure(category: category(for: error), message: String(describing: error))
     }
 

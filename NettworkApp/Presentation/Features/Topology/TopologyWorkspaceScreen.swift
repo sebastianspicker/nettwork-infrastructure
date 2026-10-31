@@ -169,8 +169,13 @@ private struct TopologyRackElevationSection: View {
     @Bindable var model: TopologyWorkspaceModel
     let rack: RackElevationSnapshot
 
+    private var title: String {
+        if rack.isUnracked { return "Unracked devices and outlets · \(rack.faceName.capitalized)" }
+        return "\(rack.assetCode.value) · \(rack.heightRU) RU · \(rack.faceName.capitalized)"
+    }
+
     var body: some View {
-        Section("\(rack.assetCode.value) · \(rack.heightRU) RU · \(rack.faceName.capitalized)") {
+        Section(title) {
             ForEach(rack.entries) { entry in
                 TopologyRackEntryRow(entry: entry)
             }

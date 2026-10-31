@@ -126,6 +126,9 @@ private enum CanonicalWorkIntentEncoder {
             try appendPrefixLayout(vrf: vrf, revision: revision, current: current, desired: desired, schemaVersion: intentSchemaVersion, to: &data)
         case let .addressAssignment(value): try appendAddressAssignments(value, to: &data)
         case let .vlanMembership(value): try appendVLANMemberships(value, to: &data)
+        case let .create(value):
+            append("create", to: &data)
+            append(try CanonicalJSONCoding.encode(value), to: &data)
         case let .legacyAddressAssignment(key, interfaceID):
             try appendLegacyAddress(key: key, interfaceID: interfaceID, schemaVersion: intentSchemaVersion, to: &data)
         case let .legacyVLANMembership(interfaceID, vlanID, isNative):

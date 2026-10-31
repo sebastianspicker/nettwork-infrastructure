@@ -5,10 +5,17 @@ import FeatureContracts
 import Foundation
 import ImportExport
 import NetworkModel
+import OSLog
 import Persistence
 import WorkspaceChangeControl
 
 extension SwiftDataFeatureReadAdapter {
+    /// Counts-only diagnostics for records the read projection had to skip.
+    static let quarantineLog = Logger(subsystem: "com.nettwork.workspace-services", category: "mirror.read")
+
+    /// Stable placeholder identity of the synthetic "Unracked" rack group.
+    static let unrackedGroupID = ObjectID(UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)))
+
     static func inventoryKind(_ kind: LocationKind) -> InventoryObjectKind {
         switch kind {
         case .site:
@@ -126,6 +133,8 @@ struct TopologyBrowseIndexes {
     let devicesByID: [ObjectID: Device]
     let modulesByID: [ObjectID: Module]
     let portsByRackFace: [RackFaceKey: [NetworkModel.Port]]
+    /// Ports of devices outside every listed rack, keyed by face name.
+    let unrackedPortsByFace: [String: [NetworkModel.Port]]
     let cableByEndpoint: [ObjectID: Cable]
     let reservedPortIDs: Set<ObjectID>
     let placementsByRackFace: [RackFaceKey: [RackPlacement]]
@@ -138,7 +147,7 @@ struct TopologyBrowseIndexes {
     ) throws {
         let indexedDevices = Dictionary(devices.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
         let indexedModules = Dictionary(modules.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
-        let portIndexes = try Self.portIndexes(ports, devicesByID: indexedDevices)
+        let portIndexes = try Self.portIndexes(ports, devicesByID: indexedDevices, rackIDs: Set(racks.map(\.id)))
         locationChildCount = try Self.locationCounts(locations)
         rackCountByLocation = try Self.rackCounts(racks)
         deviceCountByRack = try Self.deviceCounts(devices)
@@ -148,6 +157,7 @@ struct TopologyBrowseIndexes {
         devicesByID = indexedDevices
         modulesByID = indexedModules
         portsByRackFace = portIndexes.byRackFace
+        unrackedPortsByFace = portIndexes.unrackedByFace
         cableByEndpoint = try Self.cablesByEndpoint(cables)
         reservedPortIDs = try Self.reservedPortIDs(reservations)
         placementsByRackFace = try Self.placementsByRackFace(placements)
@@ -191,15 +201,17 @@ struct TopologyBrowseIndexes {
     }
 
     private static func portIndexes(
-        _ ports: [NetworkModel.Port], devicesByID: [ObjectID: Device]
+        _ ports: [NetworkModel.Port], devicesByID: [ObjectID: Device], rackIDs: Set<ObjectID>
     ) throws -> (
         directByDevice: [ObjectID: Int],
         byModule: [ObjectID: Int],
-        byRackFace: [RackFaceKey: [NetworkModel.Port]]
+        byRackFace: [RackFaceKey: [NetworkModel.Port]],
+        unrackedByFace: [String: [NetworkModel.Port]]
     ) {
         var directByDevice: [ObjectID: Int] = [:]
         var byModule: [ObjectID: Int] = [:]
         var byRackFace: [RackFaceKey: [NetworkModel.Port]] = [:]
+        var unrackedByFace: [String: [NetworkModel.Port]] = [:]
         for (offset, port) in ports.enumerated() {
             try checkCancellation(at: offset)
             if let moduleID = port.moduleID {
@@ -207,12 +219,14 @@ struct TopologyBrowseIndexes {
             } else {
                 directByDevice[port.deviceID, default: 0] += 1
             }
-            if let rackID = devicesByID[port.deviceID]?.rackID {
+            if let rackID = devicesByID[port.deviceID]?.rackID, rackIDs.contains(rackID) {
                 let key = RackFaceKey(rackID: rackID, faceName: port.face.rawValue)
                 byRackFace[key, default: []].append(port)
+            } else {
+                unrackedByFace[port.face.rawValue, default: []].append(port)
             }
         }
-        return (directByDevice, byModule, byRackFace)
+        return (directByDevice, byModule, byRackFace, unrackedByFace)
     }
 
     private static func cablesByEndpoint(_ cables: [Cable]) throws -> [ObjectID: Cable] {

@@ -44,6 +44,7 @@ struct TopologyWorkOrderDraftScreen: View {
             )
             TopologyWorkOrderFields(title: $title, ticket: $ticket, notes: $notes)
             TopologyStageDraftButton(model: model, title: title, ticket: ticket, stage: stageDraft)
+            TopologyStagingFeedback(model: model)
         }
         .navigationTitle("Stage topology work")
         .onAppear { selectedCableID = model.selectedCableID }
@@ -220,6 +221,7 @@ private struct TopologyStageDraftButton: View {
         Button("Stage work-order draft", action: stage)
             .disabled(
                 model.proposedAction == nil
+                    || model.isStaging
                     || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     || ticket.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             )

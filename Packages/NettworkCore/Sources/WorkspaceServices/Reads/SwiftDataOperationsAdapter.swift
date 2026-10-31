@@ -102,6 +102,27 @@ public final class SwiftDataOperationsAdapter: OperationsFeatureService, Operati
             releaseAuthorization: releaseAuthorization, authorization: authorization, in: account.namespace)
     }
 
+    public func workOrders() async throws -> [WorkOrderSummary] {
+        let records = try await reader.records(
+            in: account.namespace, recordTypes: [CloudRecordNaming.workOrderRecordType, LocalRecordKind.workOrder], limitPerType: recordLimitPerType)
+        let updatedAt = Dictionary(records.map { ($0.resourceKey, $0.serverModifiedAt) }, uniquingKeysWith: max)
+        return try records.decoded(WorkOrder.self, recordType: CloudRecordNaming.workOrderRecordType, expectedResourceKey: { .object($0.id) })
+            .map { order in
+                WorkOrderSummary(
+                    id: order.id, title: order.title, status: order.status, ticket: order.ticket,
+                    reservationExpiresAt: order.reservation?.acknowledgedByCloudKit?.expiresAt, updatedAt: updatedAt[.object(order.id)] ?? .distantPast)
+            }
+            .sorted { ($0.updatedAt, $0.id.description) > ($1.updatedAt, $1.id.description) }
+    }
+
+    public func stagedDrafts() async throws -> [WorkOrderDraft] {
+        try await mutations.stagedDrafts(in: account.namespace)
+    }
+
+    public func reopenWorkOrder(id: ObjectID, authorization: OperationsAuthorization) async throws -> ReopenedWorkOrder {
+        try await mutations.reopenWorkOrder(id: id, authorization: authorization, in: account.namespace)
+    }
+
     public func auditEvents(matching query: String) async throws -> [AuditEventPresentation] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase
         let events = try await records()

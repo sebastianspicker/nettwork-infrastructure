@@ -16,6 +16,7 @@ extension ProductionRuntimeAssembly {
             persistence: foundation.persistence,
             currentAuthorizationContext: foundation.sessionAuthorizer,
             operationBoundary: foundation.operationBoundary,
+            historyDirectory: input.workspaceStorage.historyDirectory,
             authorities: authorities,
             floorPlanService: floorPlan.service,
             transferService: transfer.service,
@@ -36,8 +37,9 @@ extension ProductionRuntimeAssembly {
         )
     }
 
-    /// Selected `.nettworkarchive` packages are always read by the platform
-    /// package adapter; the Transfer screen only receives this factory.
+    /// Selected `.nettworkarchive` packages and CSV folders are always read by
+    /// the platform package adapters, and picked floor plans and evidence by the
+    /// platform content sources; screens only receive these factories.
     private static func makeFeatureCapabilities(_ context: OrganizationInput.FeatureContext) -> AppFeatureOptionalCapabilities {
         AppFeatureOptionalCapabilities(
             auditExportAuthorization: context.auditExportAuthorization,
@@ -45,6 +47,11 @@ extension ProductionRuntimeAssembly {
             attachmentAuthorization: context.attachmentAuthorization,
             floorPlanPreviewAuthorization: context.floorPlanPreviewAuthorization,
             csvImportDocument: context.csvImportDocument,
+            csvPackageSource: { url in try ProductionCSVDirectoryPackageSource.source(at: url) },
+            pickedContentSources: PickedContentSources(
+                file: { url in try ProductionFileContentSource(url: url) },
+                data: { data, type in ProductionDataContentSource(data: data, declaredType: type) }
+            ),
             importAuthorization: context.importAuthorization,
             csvExportAuthorization: context.csvExportAuthorization,
             csvExportDestination: context.csvExportDestination,

@@ -31,6 +31,7 @@ enum CSVWorkspaceDocumentError: LocalizedError {
     case oversizedFile(String)
     case oversizedPackage
     case duplicateFilename(String)
+    case noSelection
 
     var errorDescription: String? {
         switch self {
@@ -38,6 +39,7 @@ enum CSVWorkspaceDocumentError: LocalizedError {
         case .oversizedFile(let filename): "The CSV export file is too large: \(filename)."
         case .oversizedPackage: "The CSV workspace export exceeds the package size limit."
         case .duplicateFilename(let filename): "The CSV workspace export contains a duplicate filename: \(filename)."
+        case .noSelection: "Select a folder or Nettwork CSV workspace that contains the CSV files."
         }
     }
 }
@@ -71,13 +73,30 @@ struct NettworkArchiveDocument: FileDocument, @unchecked Sendable {
         existingFile ?? package
     }
 
+    /// Writes after the exporter has returned, so the destination's security
+    /// scope must be held explicitly for the duration of the write.
     static func publish(_ exportDocument: ArchiveExportDocument, to destination: URL) throws {
         let package = try packageWrapper(for: exportDocument.entries)
+        let didStartAccess = destination.startAccessingSecurityScopedResource()
+        defer { if didStartAccess { destination.stopAccessingSecurityScopedResource() } }
         try package.write(
             to: destination,
             options: .atomic,
             originalContentsURL: destination
         )
+    }
+
+    /// Removes the exporter's placeholder when publication did not happen, so no
+    /// empty package can be mistaken for a backup. `rmdir` only removes an empty
+    /// directory; a preserved existing archive is never touched.
+    @discardableResult
+    static func discardUnpublishedPlaceholder(at destination: URL) -> Bool {
+        let didStartAccess = destination.startAccessingSecurityScopedResource()
+        defer { if didStartAccess { destination.stopAccessingSecurityScopedResource() } }
+        return destination.withUnsafeFileSystemRepresentation { path in
+            guard let path else { return false }
+            return rmdir(path) == 0
+        }
     }
 
     private static func packageWrapper(for entries: [String: Data]) throws -> FileWrapper {

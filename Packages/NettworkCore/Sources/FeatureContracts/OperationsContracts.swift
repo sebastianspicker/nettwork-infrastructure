@@ -32,6 +32,12 @@ public protocol OperationsFeatureService {
         authorization: OperationsAuthorization
     ) async throws
     func correctiveWorkOrder(for reconciliationID: ObjectID, authorization: OperationsAuthorization) async throws -> ObjectID
+    /// Authoritative work orders of the workspace, most recently updated first.
+    func workOrders() async throws -> [WorkOrderSummary]
+    /// Every durable staged draft of the workspace.
+    func stagedDrafts() async throws -> [WorkOrderDraft]
+    /// Re-reads one authoritative work order so its lifecycle can continue.
+    func reopenWorkOrder(id: ObjectID, authorization: OperationsAuthorization) async throws -> ReopenedWorkOrder
 }
 
 /// UI-facing boundary for the two-phase evidence workflow. Implementations keep

@@ -12,6 +12,7 @@ final class AppDependencies {
     private(set) var lastSyncReceipt: SyncReceipt?
     private let bootstrapService: any AppBootstrapServing
     private var hasBootstrapped = false
+    private var isSynchronizing = false
 
     var syncStatus: WorkspaceShellState.SyncStatus { shell.syncStatus }
 
@@ -49,7 +50,12 @@ final class AppDependencies {
         apply(await bootstrapService.start())
     }
 
+    /// Manual and scene-activation requests share one in-flight sync; a request
+    /// that arrives while one runs is dropped rather than queued.
     func synchronizeForeground() async {
+        guard !isSynchronizing else { return }
+        isSynchronizing = true
+        defer { isSynchronizing = false }
         shell.syncStatus = .syncing
         apply(await bootstrapService.synchronizeForeground())
     }

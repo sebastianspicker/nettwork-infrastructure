@@ -37,6 +37,23 @@ extension OperationsFeatureViewModel {
         }
     }
 
+    /// Prepares evidence the user picked (file or photo). Loading or opening the
+    /// source can fail before the service runs; that is reported, not swallowed.
+    func preparePickedEvidence(
+        source load: () async throws -> (any OpaqueContentSource)?,
+        authorization: AuthorizedOperationContext
+    ) async {
+        let source: any OpaqueContentSource
+        do {
+            guard let loaded = try await load() else { return }
+            source = loaded
+        } catch {
+            fail(error)
+            return
+        }
+        await prepareEvidence(source: source, authorization: authorization)
+    }
+
     func cleanupPreparedEvidence(
         itemID: UUID,
         authorization: AuthorizedOperationContext?

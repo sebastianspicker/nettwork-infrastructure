@@ -46,6 +46,12 @@ final class OperationsFeatureViewModel {
     let evidenceService: any AttachmentEvidenceFeatureService
     var evidenceItems: [WorkOrderEvidenceItem] = []
     var stagedDrafts: [WorkOrderDraft] = []
+    /// Authoritative work orders from the mirror; each can be reopened.
+    var workOrderRows: [OperationsWorkOrderRow] = []
+    var workOrderListError: String?
+    /// The open work order's reservation was released through cancellation,
+    /// so a fresh copy of its intent may be reserved again.
+    var isReleasedWorkOrder = false
     var validatedDraft: WorkOrderDraft?
     var validationGeneration: UInt64 = 0
     var lifecycleOperation: UUID?
@@ -84,15 +90,24 @@ final class OperationsFeatureViewModel {
         guard lifecycleOperation == nil else { return false }
         switch phase {
         case .reserved, .approved, .executing: return true
+        // An expired or unconfirmed reservation still holds its locks; the
+        // cancellation path is how they are released.
+        case .awaitingConfirmation: return reservation.map { [.reserved, .approved, .executing].contains($0.workOrderStatus) } ?? false
         default: return false
         }
     }
     var canResolveCancellation: Bool { lifecycleOperation == nil && phase == .cancellationRequested }
     var canSynchronize: Bool { lifecycleOperation == nil }
     var canValidate: Bool { lifecycleOperation == nil && reservation == nil }
+    /// A completed (or cancellation-resolved) work order holds no locks, so its
+    /// reservation and bound evidence must not keep the next staged draft out.
+    var isWorkOrderFinished: Bool { phase == .completed }
     var canSelectStagedDraft: Bool {
-        lifecycleOperation == nil && reservation == nil && evidenceItems.isEmpty
+        lifecycleOperation == nil && (isWorkOrderFinished || (reservation == nil && evidenceItems.isEmpty))
     }
+    /// Reopening replaces the open work order with authoritative state, so
+    /// only evidence that is prepared but not yet bound would be lost.
+    var canReopenWorkOrder: Bool { lifecycleOperation == nil && !hasUnboundPreparedEvidence }
     var canPrepareEvidence: Bool {
         lifecycleOperation == nil && reservation == nil && (phase == .editing || phase == .readyToReserve) && !evidenceItems.contains { $0.state == .preparing }
     }

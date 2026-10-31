@@ -2,6 +2,7 @@
     @preconcurrency import CloudKit
     import Foundation
     import NetworkModel
+    import WorkspaceChangeControl
 
     @available(iOS 17.0, macOS 14.0, macCatalyst 17.0, tvOS 17.0, watchOS 10.0, *)
     public enum CloudKitSyncEngineBatchSourceError: Error, Hashable, Sendable {
@@ -25,6 +26,76 @@
         case identityIndexFailure
         case invalidRemoteAsset(ResourceKey)
         case unknownEvent
+    }
+
+    /// Failure bookkeeping for one batch source. Account changes, a deleted
+    /// workspace zone, and foreign-zone deliveries stay terminal for the bound
+    /// namespace; every other failure is retryable but forces the engine to be
+    /// rebuilt from the last durably applied state, so changes the failed fetch
+    /// advanced past in memory are fetched again instead of being skipped.
+    @available(iOS 17.0, macOS 14.0, macCatalyst 17.0, tvOS 17.0, watchOS 10.0, *)
+    struct CloudKitBatchSourceFailureState: Sendable {
+        private(set) var terminalFailure: CloudKitSyncEngineBatchSourceError?
+        private(set) var requiresEngineRestart = false
+
+        static func isTerminal(_ error: CloudKitSyncEngineBatchSourceError) -> Bool {
+            switch error {
+            case .accountChanged, .workspaceZoneDeleted, .unexpectedZone: true
+            default: false
+            }
+        }
+
+        mutating func record(_ error: CloudKitSyncEngineBatchSourceError) {
+            if terminalFailure == nil, Self.isTerminal(error) { terminalFailure = error }
+            requiresEngineRestart = true
+        }
+
+        mutating func requireEngineRestart() { requiresEngineRestart = true }
+
+        mutating func engineRestarted() { requiresEngineRestart = false }
+
+        func throwIfTerminal() throws {
+            if let terminalFailure { throw terminalFailure }
+        }
+    }
+
+    /// Fetched-but-uncommitted engine states per namespace. A later fetch is
+    /// refused while one is pending; only the mirror acknowledgement or an
+    /// explicit discard of that exact state releases it.
+    struct CloudKitPendingFetchedStates: Sendable {
+        private var stateByNamespace: [PersistenceNamespace: Data] = [:]
+
+        func pendingState(in namespace: PersistenceNamespace) -> Data? { stateByNamespace[namespace] }
+
+        mutating func record(_ state: Data, in namespace: PersistenceNamespace) throws {
+            guard stateByNamespace[namespace] == nil else {
+                throw CloudKitSyncEngineStateError.fetchedStateAwaitingMirrorCommit(namespace)
+            }
+            stateByNamespace[namespace] = state
+        }
+
+        func requireNoPendingState(in namespace: PersistenceNamespace) throws {
+            guard stateByNamespace[namespace] == nil else {
+                throw CloudKitSyncEngineStateError.fetchedStateAwaitingMirrorCommit(namespace)
+            }
+        }
+
+        func requirePendingState(_ state: Data, in namespace: PersistenceNamespace) throws {
+            guard stateByNamespace[namespace] == state else {
+                throw CloudKitSyncEngineStateError.appliedStateDoesNotMatchFetchedState(namespace)
+            }
+        }
+
+        mutating func acknowledge(_ state: Data, in namespace: PersistenceNamespace) {
+            if stateByNamespace[namespace] == state { stateByNamespace[namespace] = nil }
+        }
+
+        /// Returns whether `state` was the pending state and has been released.
+        mutating func discard(_ state: Data, in namespace: PersistenceNamespace) -> Bool {
+            guard stateByNamespace[namespace] == state else { return false }
+            stateByNamespace[namespace] = nil
+            return true
+        }
     }
 
     struct CloudKitFetchAdmission: Sendable {
@@ -66,7 +137,7 @@
         }
 
         func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
-            await owner?.receive(event)
+            await owner?.receive(event, from: syncEngine)
         }
 
         func nextRecordZoneChangeBatch(
@@ -85,6 +156,15 @@
 
     @available(iOS 17.0, macOS 14.0, macCatalyst 17.0, tvOS 17.0, watchOS 10.0, *)
     enum CloudKitSyncEngineStateCodec {
+        static func makeEngine(
+            database: CKDatabase, persistedState: Data?, delegate: CloudKitSyncEngineBatchSourceDelegate, subscriptionID: CKSubscription.ID?
+        ) throws -> CKSyncEngine {
+            var configuration = CKSyncEngine.Configuration(database: database, stateSerialization: try decode(persistedState), delegate: delegate)
+            configuration.automaticallySync = false
+            configuration.subscriptionID = subscriptionID
+            return CKSyncEngine(configuration)
+        }
+
         static func decode(_ state: Data?) throws -> CKSyncEngine.State.Serialization? {
             try state.map { try PropertyListDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
         }

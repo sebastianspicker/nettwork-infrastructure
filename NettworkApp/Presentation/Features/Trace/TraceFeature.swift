@@ -43,6 +43,7 @@ final class TraceInspectionModel {
         let generation = loadGeneration
         let requestedDirection = direction
         state = .loading
+        inspection = nil
         do {
             let result = try await service.inspect(
                 startingAt: startPortID,
@@ -62,6 +63,7 @@ final class TraceInspectionModel {
             }
         } catch {
             guard generation == loadGeneration, !Task.isCancelled else { return }
+            inspection = nil
             state = .offline("The trace is unavailable from the scoped local mirror.")
         }
     }

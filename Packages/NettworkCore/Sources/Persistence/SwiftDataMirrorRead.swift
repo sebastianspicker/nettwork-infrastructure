@@ -112,9 +112,14 @@ extension SwiftDataPersistenceStore {
         return state
     }
 
+    /// Idempotent per rejected record: a batch that is fetched again after a
+    /// discarded sync attempt does not add a second copy of the same evidence.
     public func quarantine(_ record: LocalQuarantineRecord) throws {
         try transaction {
             try validateActiveLease(for: record.namespace)
+            let existing = try quarantineModels(namespaceKey: PersistenceNamespaceKey.value(for: record.namespace))
+                .map { try PersistenceCoding.decode(LocalQuarantineRecord.self, from: $0.recordData) }
+            guard !existing.contains(where: { $0.isSameRejection(as: record) }) else { return }
             modelContext.insert(try LocalQuarantineModel(record: record))
         }
     }

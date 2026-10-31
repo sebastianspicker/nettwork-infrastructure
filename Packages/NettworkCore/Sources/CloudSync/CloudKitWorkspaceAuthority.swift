@@ -23,11 +23,17 @@
             self.bootstrapper = bootstrapper
         }
 
+        /// Reachability failures are reported as `CloudVerificationUnavailableError`
+        /// so the session can recover; every other lookup failure still reports
+        /// an unavailable account, which invalidates the session.
         public func currentAccount() async throws -> CloudAccountIdentity {
             do {
                 let recordID = try await container.userRecordID()
                 return CloudAccountIdentity(cloudKitUserRecordName: recordID.recordName, isAvailable: true)
-            } catch { return CloudAccountIdentity(cloudKitUserRecordName: "", isAvailable: false) }
+            } catch {
+                if let unavailable = CloudKitVerificationFailureClassifier.transientFailure(for: error) { throw unavailable }
+                return CloudAccountIdentity(cloudKitUserRecordName: "", isAvailable: false)
+            }
         }
 
         public func createWorkspace(workspaceID: ObjectID, containerIdentifier: String) async throws -> AccountContext {
@@ -55,9 +61,44 @@
         }
 
         public func verifyMembership(for context: AccountContext) async throws -> AccountContext? {
-            let recordID = try await container.userRecordID()
-            guard recordID.recordName == context.namespace.cloudKitAccountRecordName else { return nil }
-            return try await contextStore.refreshedContext(for: context, accountRecordName: recordID.recordName)
+            do {
+                let recordID = try await container.userRecordID()
+                guard recordID.recordName == context.namespace.cloudKitAccountRecordName else { return nil }
+                return try await contextStore.refreshedContext(for: context, accountRecordName: recordID.recordName)
+            } catch {
+                throw CloudKitVerificationFailureClassifier.transientFailure(for: error) ?? error
+            }
+        }
+    }
+
+    /// Separates reachability loss from definitive account and membership
+    /// outcomes. Only offline, throttled, and busy-service codes are transient;
+    /// every other error, including unknown and partial failures, stays
+    /// definitive so verification fails closed and invalidates the session.
+    enum CloudKitVerificationFailureClassifier {
+        private static let offlineURLCodes: Set<URLError.Code> = [
+            .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed,
+            .internationalRoamingOff, .dataNotAllowed,
+        ]
+
+        static func transientFailure(for error: Error) -> CloudVerificationUnavailableError? {
+            if let cloudError = error as? CKError { return transientFailure(for: cloudError) }
+            if let urlError = error as? URLError, offlineURLCodes.contains(urlError.code) {
+                return CloudVerificationUnavailableError(reason: .networkUnavailable)
+            }
+            return nil
+        }
+
+        private static func transientFailure(for error: CKError) -> CloudVerificationUnavailableError? {
+            let retryAfter = error.retryAfterSeconds.map { Date.now.addingTimeInterval($0) }
+            switch error.code {
+            case .networkUnavailable, .networkFailure, .serviceUnavailable, .serverResponseLost:
+                return CloudVerificationUnavailableError(reason: .networkUnavailable, retryAfter: retryAfter)
+            case .requestRateLimited, .zoneBusy:
+                return CloudVerificationUnavailableError(reason: .serviceThrottled, retryAfter: retryAfter)
+            default:
+                return nil
+            }
         }
     }
 

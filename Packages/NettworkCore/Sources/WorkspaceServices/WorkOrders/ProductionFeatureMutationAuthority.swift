@@ -67,9 +67,13 @@ public struct ProductionStagedAuditExport: Sendable {
     }
 }
 
+/// Durable implementations throw instead of losing or inventing drafts; an
+/// unreadable store must stay unreadable rather than appear empty.
 public protocol ProductionStagedWorkOrderDraftStoring: Sendable {
-    func store(_ draft: WorkOrderDraft, in namespace: PersistenceNamespace) async
-    func draft(id: ObjectID, in namespace: PersistenceNamespace) async -> WorkOrderDraft?
+    func store(_ draft: WorkOrderDraft, in namespace: PersistenceNamespace) async throws
+    func draft(id: ObjectID, in namespace: PersistenceNamespace) async throws -> WorkOrderDraft?
+    /// Every staged draft of `namespace`, in a stable order.
+    func drafts(in namespace: PersistenceNamespace) async throws -> [WorkOrderDraft]
 }
 
 public actor SessionWorkOrderDraftStore: ProductionStagedWorkOrderDraftStoring {
@@ -83,6 +87,10 @@ public actor SessionWorkOrderDraftStore: ProductionStagedWorkOrderDraftStoring {
 
     public func draft(id: ObjectID, in namespace: PersistenceNamespace) -> WorkOrderDraft? {
         drafts[namespace]?[id]
+    }
+
+    public func drafts(in namespace: PersistenceNamespace) -> [WorkOrderDraft] {
+        (drafts[namespace] ?? [:]).values.sorted { ($0.title, $0.id.description) < ($1.title, $1.id.description) }
     }
 }
 

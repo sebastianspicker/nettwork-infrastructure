@@ -13,12 +13,14 @@ struct AppRuntimeComposition {
         features: AppFeatureComposition,
         activateWorkspace: @escaping () async throws -> Void,
         syncCoordinator: any SyncCoordinator,
-        invalidateWorkspace: @escaping () async -> Void
+        invalidateWorkspace: @escaping () async -> Void,
+        hasActiveWorkspaceSession: @escaping () async -> Bool
     ) -> AppRuntimeComposition {
         let bootstrap = ProductionAppBootstrapService(
             activateWorkspace: activateWorkspace,
             syncCoordinator: syncCoordinator,
-            invalidateWorkspace: invalidateWorkspace
+            invalidateWorkspace: invalidateWorkspace,
+            hasActiveWorkspaceSession: hasActiveWorkspaceSession
         )
         return AppRuntimeComposition(
             dependencies: AppDependencies(

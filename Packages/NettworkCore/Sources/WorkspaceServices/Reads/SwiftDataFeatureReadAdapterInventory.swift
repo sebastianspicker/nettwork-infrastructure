@@ -223,14 +223,34 @@ extension SwiftDataFeatureReadAdapter {
                 }
             }
         }
+        for face in ["front", "rear"] {
+            if let snapshot = unrackedSnapshot(face: face, projection: projection, indexes: indexes) {
+                snapshots.append(snapshot)
+            }
+        }
         return snapshots.sorted { lexicalLess([$0.assetCode.value, $0.faceName, $0.id], [$1.assetCode.value, $1.faceName, $1.id]) }
+    }
+
+    /// Wall outlets, patch panels and room equipment have no rack, so their
+    /// ports are carried by one synthetic group per face instead of being lost.
+    private func unrackedSnapshot(face: String, projection: MirrorProjection, indexes: TopologyBrowseIndexes) -> RackElevationSnapshot? {
+        guard let unracked = indexes.unrackedPortsByFace[face], !unracked.isEmpty else { return nil }
+        return RackElevationSnapshot(
+            id: "unracked:\(face)",
+            rackID: Self.unrackedGroupID,
+            assetCode: AssetCode("Unracked"),
+            heightRU: 0,
+            faceName: face,
+            entries: [],
+            ports: portSnapshots(unracked, projection: projection, indexes: indexes),
+            isUnracked: true
+        )
     }
 
     private func rackFaceSnapshot(rack: Rack, face: String, projection: MirrorProjection, indexes: TopologyBrowseIndexes) throws -> RackElevationSnapshot? {
         let key = TopologyBrowseIndexes.RackFaceKey(rackID: rack.id, faceName: face)
         let ports = try rackPortSnapshots(key: key, projection: projection, indexes: indexes)
         let entries = rackEntries(key: key, indexes: indexes)
-        guard !ports.isEmpty || !entries.isEmpty else { return nil }
         return RackElevationSnapshot(
             id: "\(rack.id.description):\(face)",
             rackID: rack.id,
@@ -250,7 +270,15 @@ extension SwiftDataFeatureReadAdapter {
             try Self.checkCancellation(at: offset)
             result.append(topologyPortSnapshot(port, projection: projection, indexes: indexes))
         }
-        return result.sorted {
+        return Self.sortedPortSnapshots(result)
+    }
+
+    private func portSnapshots(_ ports: [NetworkModel.Port], projection: MirrorProjection, indexes: TopologyBrowseIndexes) -> [TopologyPortSnapshot] {
+        Self.sortedPortSnapshots(ports.map { topologyPortSnapshot($0, projection: projection, indexes: indexes) })
+    }
+
+    private static func sortedPortSnapshots(_ snapshots: [TopologyPortSnapshot]) -> [TopologyPortSnapshot] {
+        snapshots.sorted {
             lexicalLess([$0.faceName, $0.label, $0.id.description], [$1.faceName, $1.label, $1.id.description])
         }
     }

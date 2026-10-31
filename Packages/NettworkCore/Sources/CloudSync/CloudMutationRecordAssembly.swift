@@ -61,7 +61,7 @@ extension MutationPrecondition {
 }
 
 extension CloudRecordPrecondition {
-    var preconditionRecordName: String {
+    public var preconditionRecordName: String {
         switch self {
         case .mustNotExist(let recordName), .exact(let recordName, _, _):
             return recordName

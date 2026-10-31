@@ -8,7 +8,7 @@
     /// AccountContext, asks the CKSyncEngine driver for scoped changes, and writes
     /// every mutation with a single atomic conditional CKModifyRecordsOperation.
     public actor CloudKitRecordTransport: CloudRecordTransport, CloudConditionalBatchTransport, CloudReceiptLookupTransport, CloudExactRecordReading,
-        CloudAppliedChangeStatePersisting, CloudStagedTransferGCTransport
+        CloudAppliedChangeStatePersisting, CloudFetchedChangeStateDiscarding, CloudStagedTransferGCTransport
     {
         let container: CKContainer
         let account: AccountContext
@@ -31,6 +31,10 @@
 
         public func persistAppliedChangeState(_ state: Data) async throws {
             try await stateStore.persistAppliedState(state, in: account.namespace)
+        }
+
+        public func discardFetchedChangeState(_ state: Data) async {
+            await engine.discardFetchedState(state, in: account.namespace)
         }
 
         public func saveAtomically(_ mutation: AtomicCloudMutation) async throws -> CloudSaveResult {

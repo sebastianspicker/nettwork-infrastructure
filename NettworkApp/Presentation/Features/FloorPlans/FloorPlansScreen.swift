@@ -12,6 +12,9 @@ struct FloorPlansScreen: View {
     /// The app integration owns file importer presentation and supplies only an
     /// already-authorized opaque source here, never a feature-controlled URL.
     let importSource: (() -> (any OpaqueContentSource)?)?
+    /// Platform factories for a file the user picks in-app when the organization
+    /// supplies no `importSource`.
+    let pickedContent: PickedContentSources?
     let attachmentAuthorization: (() -> AuthorizedOperationContext?)?
     /// Must mint a current `.readAttachment` context after sanitization; the
     /// import context is intentionally `.createAttachment` and cannot be reused.
@@ -25,6 +28,7 @@ struct FloorPlansScreen: View {
     @GestureState private var panTranslation = CGSize.zero
     @State private var showAccessibleList = false
     @State var newObjectID = ""
+    @State var isAttachmentImporterPresented = false
     @State var selectedAnchorObject: InventorySearchResult?
     @State private var showObjectPicker = false
     @State private var pendingAnchorRemoval: FloorPlanAnchor?
@@ -35,6 +39,7 @@ struct FloorPlansScreen: View {
         model: FloorPlanViewModel,
         authorization: OperationsAuthorization,
         importSource: (() -> (any OpaqueContentSource)?)? = nil,
+        pickedContent: PickedContentSources? = nil,
         attachmentAuthorization: (() -> AuthorizedOperationContext?)? = nil,
         previewAuthorization: (() -> AuthorizedOperationContext?)? = nil,
         objectDestination: (@MainActor (ObjectID) -> AnyView)? = nil,
@@ -44,6 +49,7 @@ struct FloorPlansScreen: View {
         _model = State(initialValue: model)
         self.authorization = authorization
         self.importSource = importSource
+        self.pickedContent = pickedContent
         self.attachmentAuthorization = attachmentAuthorization
         self.previewAuthorization = previewAuthorization
         self.objectDestination = objectDestination
@@ -89,6 +95,12 @@ struct FloorPlansScreen: View {
             label: { model.labels[$0.objectID] ?? $0.objectID.description },
             remove: removeAnchor
         )
+        .fileImporter(
+            isPresented: $isAttachmentImporterPresented,
+            allowedContentTypes: PickedContentSources.pickerTypes(for: .floorPlan),
+            allowsMultipleSelection: false,
+            onCompletion: selectAttachmentForImport
+        )
         .onChange(of: model.attachmentState) { _, state in
             statusAnnouncer.announce(floorPlanAttachmentStatus(state))
         }
@@ -102,12 +114,13 @@ struct FloorPlansScreen: View {
 
     private func floorPlanCanvas(model: Bindable<FloorPlanViewModel>) -> some View {
         GeometryReader { proxy in
+            let plan = FloorPlanCanvasLayout.imageRect(imageSize: renderedImageSize, in: proxy.size)
             ZStack {
                 floorPlanPreview
                     .contentShape(Rectangle())
                     .gesture(canvasPanGesture)
                 ForEach(model.wrappedValue.filteredAnchors) { anchor in
-                    anchorMarker(anchor, size: proxy.size, model: model)
+                    anchorMarker(anchor, in: plan, model: model)
                 }
             }
             .coordinateSpace(name: "floorPlanCanvas")
@@ -194,7 +207,7 @@ struct FloorPlansScreen: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(
-                importSource == nil
+                (importSource == nil && pickedContent == nil)
                     || attachmentAuthorization == nil
                     || previewAuthorization == nil
                     || !model.wrappedValue.canBeginAttachmentImport
@@ -229,6 +242,11 @@ struct FloorPlansScreen: View {
             stageWorkOrder: requestAssetWorkOrder,
             bindAsset: requestAssetBinding
         )
+    }
+
+    private var renderedImageSize: CGSize? {
+        guard case .rendered(let preview) = model.previewState else { return nil }
+        return CGSize(width: preview.image.width, height: preview.image.height)
     }
 
     @ViewBuilder private var floorPlanPreview: some View {
@@ -278,20 +296,21 @@ struct FloorPlansScreen: View {
             .accessibilityLabel(description)
     }
 
-    private func anchorMarker(_ anchor: FloorPlanAnchor, size: CGSize, model: Bindable<FloorPlanViewModel>) -> some View {
+    private func anchorMarker(_ anchor: FloorPlanAnchor, in plan: CGRect, model: Bindable<FloorPlanViewModel>) -> some View {
         let label = model.wrappedValue.labels[anchor.objectID] ?? anchor.objectID.description
         return NavigationLink(value: AppRoute.object(anchor.objectID.rawValue)) {
             Label(label, systemImage: "mappin.circle.fill")
                 .labelStyle(.iconOnly)
                 .font(.title2)
         }
-        .position(x: CGFloat(anchor.x) * size.width, y: CGFloat(anchor.y) * size.height)
+        .position(x: plan.minX + CGFloat(anchor.x) * plan.width, y: plan.minY + CGFloat(anchor.y) * plan.height)
         .accessibilityLabel("Anchor \(label), \(Int(anchor.x * 100)) percent across, \(Int(anchor.y * 100)) percent down")
         .accessibilityIdentifier("floor-plan.anchor.\(anchor.id)")
         .gesture(
             DragGesture(coordinateSpace: .named("floorPlanCanvas")).onEnded { value in
                 guard !model.wrappedValue.isAnchorActionInFlight else { return }
-                Task { await model.wrappedValue.move(anchor: anchor, to: value.location, in: size, authorization: authorization) }
+                let point = CGPoint(x: value.location.x - plan.minX, y: value.location.y - plan.minY)
+                Task { await model.wrappedValue.move(anchor: anchor, to: point, in: plan.size, authorization: authorization) }
             }
         )
         .contextMenu {

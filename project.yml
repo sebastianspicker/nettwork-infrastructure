@@ -10,6 +10,13 @@ options:
   projectFormat: xcode16_0
   createIntermediateGroups: true
 
+# "Release Alpha Local" sorts after "Release", so the existing schemes and
+# command-line builds keep their current default configurations.
+configs:
+  Debug: debug
+  Release: release
+  Release Alpha Local: release
+
 packages:
   NettworkCore:
     path: Packages/NettworkCore
@@ -25,6 +32,7 @@ targetTemplates:
     configFiles:
       Debug: Config/Debug.xcconfig
       Release: Config/Release.xcconfig
+      Release Alpha Local: Config/AlphaLocal.xcconfig
     settings:
       base:
         INFOPLIST_FILE: NettworkApp/Resources/Info.plist
@@ -76,3 +84,23 @@ schemes:
     build:
       targets:
         NettworkMac: all
+  Nettwork Alpha Local:
+    build:
+      targets:
+        Nettwork: all
+    run:
+      config: Release Alpha Local
+    profile:
+      config: Release Alpha Local
+    archive:
+      config: Release Alpha Local
+  Nettwork macOS Alpha Local:
+    build:
+      targets:
+        NettworkMac: all
+    run:
+      config: Release Alpha Local
+    profile:
+      config: Release Alpha Local
+    archive:
+      config: Release Alpha Local

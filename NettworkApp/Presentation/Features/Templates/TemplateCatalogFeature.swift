@@ -139,7 +139,8 @@ final class TemplateCatalogModel {
         } catch is CancellationError {
             return nil
         } catch {
-            state = .conflict("The template request conflicts with the current catalog version.")
+            state = StagingFailurePresentation.state(
+                for: error, conflictMessage: "The template request conflicts with the current catalog version.")
             return nil
         }
     }
@@ -159,7 +160,8 @@ final class TemplateCatalogModel {
         } catch is CancellationError {
             return nil
         } catch {
-            state = .conflict("The module template request conflicts with the current catalog version.")
+            state = StagingFailurePresentation.state(
+                for: error, conflictMessage: "The module template request conflicts with the current catalog version.")
             return nil
         }
     }

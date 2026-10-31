@@ -10,6 +10,11 @@ import SwiftData
 import WorkspaceChangeControl
 import WorkspaceServices
 
+/// Every capability the runtime needs from a record backend. The CloudKit
+/// transport and the local transport both satisfy it.
+typealias ProductionRuntimeRecordTransport =
+    CloudRecordTransport & CloudConditionalBatchTransport & CloudReceiptLookupTransport & CloudExactRecordReading & CloudAppliedChangeStatePersisting
+
 extension ProductionRuntimeAssembly {
     struct OrganizationInput {
         struct WorkspaceStorage {
@@ -19,6 +24,8 @@ extension ProductionRuntimeAssembly {
             let csvStagingDirectory: URL
             let archiveRestoreStagingDirectory: URL
             let auditPrivateDirectory: URL
+            /// Private, per-workspace directory of the durable Favorites and Recents.
+            let historyDirectory: URL
             let attachmentStagingLifetime: TimeInterval
             let attachmentStagingProtection: any AttachmentStagingFileProtection
             let stagedWorkOrderDraftStore: any ProductionStagedWorkOrderDraftStoring
@@ -30,6 +37,7 @@ extension ProductionRuntimeAssembly {
                 csvStagingDirectory: URL,
                 archiveRestoreStagingDirectory: URL,
                 auditPrivateDirectory: URL,
+                historyDirectory: URL,
                 attachmentStagingLifetime: TimeInterval,
                 attachmentStagingProtection: any AttachmentStagingFileProtection,
                 stagedWorkOrderDraftStore: any ProductionStagedWorkOrderDraftStoring
@@ -40,6 +48,7 @@ extension ProductionRuntimeAssembly {
                 self.csvStagingDirectory = csvStagingDirectory
                 self.archiveRestoreStagingDirectory = archiveRestoreStagingDirectory
                 self.auditPrivateDirectory = auditPrivateDirectory
+                self.historyDirectory = historyDirectory
                 self.attachmentStagingLifetime = attachmentStagingLifetime
                 self.attachmentStagingProtection = attachmentStagingProtection
                 self.stagedWorkOrderDraftStore = stagedWorkOrderDraftStore
@@ -47,10 +56,47 @@ extension ProductionRuntimeAssembly {
         }
 
         struct CloudWorkspace {
+            /// CloudKit-specific collaborators; consumed only by the CloudKit
+            /// branch of the composition root.
+            struct CloudKitBackend {
+                let cloudKitContainer: CKContainer
+                let cloudKitSubscriptionID: CKSubscription.ID?
+                let workspaceContextStore: any CloudKitWorkspaceContextStore
+                let workspaceShareService: any CloudKitWorkspaceShareService
+                let workspaceBootstrapper: any CloudKitWorkspaceBootstrapper
+            }
+
+            /// Protocol-typed local backend. It supplies the single record
+            /// transport and the workspace authority; no CloudKit type is involved.
+            /// The transport is built per assembly over that assembly's sync-state
+            /// store, whose reads need the foundation persistence's namespace lease.
+            /// The assembly awaits it before any sync runs.
+            struct LocalBackend {
+                let makeTransport: (any CloudKitSyncEngineStateStore) async throws -> any ProductionRuntimeRecordTransport
+                let workspaceAuthority: any CloudWorkspaceAuthority
+            }
+
+            enum Backend {
+                case cloudKit(CloudKitBackend)
+                case local(LocalBackend)
+
+                var kind: BackendKind {
+                    switch self {
+                    case .cloudKit: .cloudKit
+                    case .local: .local
+                    }
+                }
+            }
+
+            /// Payload-free backend discriminator used by wiring validation.
+            enum BackendKind {
+                case cloudKit
+                case local
+            }
+
             let account: AccountContext
             let workspaceName: String
-            let cloudKitContainer: CKContainer
-            let cloudKitSubscriptionID: CKSubscription.ID?
+            let backend: Backend
             let maximumRecordNameIdentities: Int
             let stagedAssetQuota: CloudStagedAssetQuotaPolicy
             /// Nil means the organization has not approved staged-transfer GC.
@@ -59,13 +105,11 @@ extension ProductionRuntimeAssembly {
             let telemetryRetention: SyncTelemetryRetentionPolicy
             let telemetryExternalSignalProvider: any PrivacySafeSyncTelemetryExternalSignalProviding
             let telemetryMetricsStore: any PrivacySafeSyncTelemetryMetricsStoring
-            let workspaceContextStore: any CloudKitWorkspaceContextStore
-            let workspaceShareService: any CloudKitWorkspaceShareService
-            let workspaceBootstrapper: any CloudKitWorkspaceBootstrapper
             let actorContextProvider: any CloudForegroundActorContextProvider
             let installationSession: any ProductionInstallationSessionProviding
             let remoteRecordValidator: CloudRemoteRecordValidator
 
+            /// Source-compatible initialiser for the CloudKit backend.
             init(
                 account: AccountContext,
                 workspaceName: String,
@@ -85,10 +129,48 @@ extension ProductionRuntimeAssembly {
                 installationSession: any ProductionInstallationSessionProviding,
                 remoteRecordValidator: CloudRemoteRecordValidator
             ) {
+                self.init(
+                    account: account,
+                    workspaceName: workspaceName,
+                    backend: .cloudKit(
+                        CloudKitBackend(
+                            cloudKitContainer: cloudKitContainer,
+                            cloudKitSubscriptionID: cloudKitSubscriptionID,
+                            workspaceContextStore: workspaceContextStore,
+                            workspaceShareService: workspaceShareService,
+                            workspaceBootstrapper: workspaceBootstrapper
+                        )),
+                    maximumRecordNameIdentities: maximumRecordNameIdentities,
+                    stagedAssetQuota: stagedAssetQuota,
+                    stagedTransferGCPolicy: stagedTransferGCPolicy,
+                    telemetrySubsystem: telemetrySubsystem,
+                    telemetryRetention: telemetryRetention,
+                    telemetryExternalSignalProvider: telemetryExternalSignalProvider,
+                    telemetryMetricsStore: telemetryMetricsStore,
+                    actorContextProvider: actorContextProvider,
+                    installationSession: installationSession,
+                    remoteRecordValidator: remoteRecordValidator
+                )
+            }
+
+            init(
+                account: AccountContext,
+                workspaceName: String,
+                backend: Backend,
+                maximumRecordNameIdentities: Int,
+                stagedAssetQuota: CloudStagedAssetQuotaPolicy,
+                stagedTransferGCPolicy: CloudStagedTransferGCPolicy?,
+                telemetrySubsystem: String,
+                telemetryRetention: SyncTelemetryRetentionPolicy,
+                telemetryExternalSignalProvider: any PrivacySafeSyncTelemetryExternalSignalProviding,
+                telemetryMetricsStore: any PrivacySafeSyncTelemetryMetricsStoring,
+                actorContextProvider: any CloudForegroundActorContextProvider,
+                installationSession: any ProductionInstallationSessionProviding,
+                remoteRecordValidator: CloudRemoteRecordValidator
+            ) {
                 self.account = account
                 self.workspaceName = workspaceName
-                self.cloudKitContainer = cloudKitContainer
-                self.cloudKitSubscriptionID = cloudKitSubscriptionID
+                self.backend = backend
                 self.maximumRecordNameIdentities = maximumRecordNameIdentities
                 self.stagedAssetQuota = stagedAssetQuota
                 self.stagedTransferGCPolicy = stagedTransferGCPolicy
@@ -96,9 +178,6 @@ extension ProductionRuntimeAssembly {
                 self.telemetryRetention = telemetryRetention
                 self.telemetryExternalSignalProvider = telemetryExternalSignalProvider
                 self.telemetryMetricsStore = telemetryMetricsStore
-                self.workspaceContextStore = workspaceContextStore
-                self.workspaceShareService = workspaceShareService
-                self.workspaceBootstrapper = workspaceBootstrapper
                 self.actorContextProvider = actorContextProvider
                 self.installationSession = installationSession
                 self.remoteRecordValidator = remoteRecordValidator

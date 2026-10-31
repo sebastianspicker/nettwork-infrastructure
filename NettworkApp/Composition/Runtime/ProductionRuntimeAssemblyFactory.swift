@@ -57,7 +57,8 @@ extension ProductionRuntimeAssembly {
     ) -> ProductionRuntimeAssembly {
         let composition = AppRuntimeComposition.production(
             features: ProductionFeatureGraphFactory.make(featureInput), activateWorkspace: foundation.activateWorkspace,
-            syncCoordinator: authorities.synchronizer, invalidateWorkspace: foundation.invalidateWorkspace)
+            syncCoordinator: authorities.synchronizer, invalidateWorkspace: foundation.invalidateWorkspace,
+            hasActiveWorkspaceSession: { [lifecycle = foundation.lifecycle] in await lifecycle.activeContext() != nil })
         return ProductionRuntimeAssembly(
             composition: composition,
             activateWorkspace: foundation.activateWorkspace,

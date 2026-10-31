@@ -17,7 +17,8 @@ let plannerRecordTypes: Set<String> = [
     WorkspaceRecordType.module, WorkspaceRecordType.Legacy.module, WorkspaceRecordType.port, WorkspaceRecordType.Legacy.port,
     WorkspaceRecordType.cable, WorkspaceRecordType.Legacy.cable, WorkspaceRecordType.internalLink, WorkspaceRecordType.Legacy.internalLink,
     WorkspaceRecordType.vrf, WorkspaceRecordType.Legacy.vrf, WorkspaceRecordType.prefix, LocalRecordKind.prefix, WorkspaceRecordType.Legacy.prefix,
-    WorkspaceRecordType.ipAddressRecord, WorkspaceRecordType.Legacy.ipAddressRecord, WorkspaceRecordType.vlan, WorkspaceRecordType.Legacy.vlan,
+    WorkspaceRecordType.ipAddressRecord, WorkspaceRecordType.Legacy.ipAddressRecord, WorkspaceRecordType.vlanGroup, WorkspaceRecordType.vlan,
+    WorkspaceRecordType.Legacy.vlan,
     WorkspaceRecordType.interface, WorkspaceRecordType.Legacy.interface, WorkspaceRecordType.ipAddressAssignment,
     WorkspaceRecordType.Legacy.ipAddressAssignment,
     WorkspaceRecordType.interfaceVLANMembership, WorkspaceRecordType.Legacy.interfaceVLANMembership,
@@ -104,6 +105,7 @@ struct Snapshot {
     var vrfs: [ObjectID: VRF]
     var prefixes: [ObjectID: Prefix]
     var addresses: [String: IPAddressRecord]
+    var vlanGroups: [ObjectID: VLANGroup]
     var vlans: [ObjectID: VLAN]
     var interfaces: [ObjectID: Interface]
     var assignments: [ObjectID: IPAddressAssignment]
@@ -134,6 +136,7 @@ struct Snapshot {
         let prefixes: [Prefix] = try values(Prefix.self, names: [WorkspaceRecordType.prefix, LocalRecordKind.prefix, WorkspaceRecordType.Legacy.prefix])
         let addresses: [IPAddressRecord] = try values(
             IPAddressRecord.self, names: [WorkspaceRecordType.ipAddressRecord, WorkspaceRecordType.Legacy.ipAddressRecord])
+        let vlanGroups: [VLANGroup] = try values(VLANGroup.self, names: [WorkspaceRecordType.vlanGroup])
         let vlans: [VLAN] = try values(VLAN.self, names: [WorkspaceRecordType.vlan, WorkspaceRecordType.Legacy.vlan])
         let interfaces: [Interface] = try values(Interface.self, names: [WorkspaceRecordType.interface, WorkspaceRecordType.Legacy.interface])
         let assignments: [IPAddressAssignment] = try values(
@@ -147,6 +150,7 @@ struct Snapshot {
         self.vrfs = Dictionary(vrfs.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
         self.prefixes = Dictionary(prefixes.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
         self.addresses = Dictionary(addresses.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
+        self.vlanGroups = Dictionary(vlanGroups.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
         self.vlans = Dictionary(vlans.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
         self.interfaces = Dictionary(interfaces.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
         self.assignments = Dictionary(assignments.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })

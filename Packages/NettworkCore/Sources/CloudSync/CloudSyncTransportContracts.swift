@@ -33,6 +33,14 @@ public protocol CloudAppliedChangeStatePersisting: Sendable {
     func persistAppliedChangeState(_ state: Data) async throws
 }
 
+/// A fetched batch the mirror rejected or never committed must not hold the
+/// engine cursor hostage. Transports with an in-memory cursor discard exactly
+/// that uncommitted state, so the next fetch restarts from the last durably
+/// applied state. Durable state and quarantined records are left untouched.
+public protocol CloudFetchedChangeStateDiscarding: Sendable {
+    func discardFetchedChangeState(_ state: Data) async
+}
+
 /// Receipt lookup resolves an indeterminate response before a retry can create a duplicate effect.
 public protocol CloudReceiptLookupTransport: Sendable {
     func receipt(operationID: ObjectID, in workspaceZone: AuthoritativeWorkspaceZone) async throws -> OperationReceipt?
@@ -197,6 +205,41 @@ public struct CloudAccountIdentity: Codable, Hashable, Sendable {
     public init(cloudKitUserRecordName: String, isAvailable: Bool) {
         self.cloudKitUserRecordName = cloudKitUserRecordName
         self.isAvailable = isAvailable
+    }
+}
+
+/// Account or membership verification could not reach the authority because
+/// the device is offline or the service is busy. It is not evidence of an
+/// account change or revocation, so the session lifecycle keeps its lease; it
+/// also grants nothing, because no caller is verified until a later check succeeds.
+public struct CloudVerificationUnavailableError: Error, Hashable, Sendable, LocalizedError {
+    public enum Reason: Hashable, Sendable {
+        case networkUnavailable
+        case serviceThrottled
+    }
+
+    public let reason: Reason
+    public let retryAfter: Date?
+
+    public init(reason: Reason, retryAfter: Date? = nil) {
+        self.reason = reason
+        self.retryAfter = retryAfter
+    }
+
+    public var failureCategory: SyncFailureCategory {
+        switch reason {
+        case .networkUnavailable: .network
+        case .serviceThrottled: .rateLimited
+        }
+    }
+
+    public var errorDescription: String? {
+        switch reason {
+        case .networkUnavailable:
+            "iCloud could not be reached to verify this workspace. It will be verified again on the next sync."
+        case .serviceThrottled:
+            "iCloud is busy and could not verify this workspace. It will be verified again on the next sync."
+        }
     }
 }
 

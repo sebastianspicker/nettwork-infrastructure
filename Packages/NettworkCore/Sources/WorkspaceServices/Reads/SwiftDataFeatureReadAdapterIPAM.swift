@@ -72,7 +72,7 @@ extension SwiftDataFeatureReadAdapter {
             guard let group = groups[vlan.groupID] else { return nil }
             let flags = projection.workflowFlags(for: .object(vlan.id))
             return VLANSnapshot(
-                id: vlan.id, groupName: group.name, number: vlan.number, name: vlan.name, state: vlan.state, isPlanned: flags.isPlanned,
+                id: vlan.id, groupID: group.id, groupName: group.name, number: vlan.number, name: vlan.name, state: vlan.state, isPlanned: flags.isPlanned,
                 isPending: flags.isPending, isConflicted: flags.isConflicted
             )
         }.sorted { lhs, rhs in

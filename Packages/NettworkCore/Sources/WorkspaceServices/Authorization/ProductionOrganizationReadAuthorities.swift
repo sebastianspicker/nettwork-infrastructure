@@ -172,37 +172,8 @@ public actor ProductionForegroundSyncAdapter: ProductionForegroundSynchronizing,
             lastSuccessfulServerContactAgeSeconds: receipt.lastSuccessfulServerContact.map(Self.boundedAge),
             externalQuota: externalSignals.quota,
             externalBackupAge: externalSignals.backupAge,
-            failureCategory: receipt.failures.first.map(Self.telemetryFailureCategory)
+            failureCategory: receipt.failures.first.map(PrivacySafeSyncTelemetryFailureCategory.init)
         )
-    }
-
-    private static func telemetryFailureCategory(_ failure: SyncFailure) -> PrivacySafeSyncTelemetryFailureCategory {
-        switch failure.category {
-        case .network, .rateLimited, .quotaExceeded, .accountUnavailable, .permissionDenied:
-            transportFailureCategory(failure.category)
-        case .validation, .conflict, .malformedRemoteRecord, .security, .unknown:
-            dataFailureCategory(failure.category)
-        }
-    }
-
-    private static func transportFailureCategory(_ category: SyncFailureCategory) -> PrivacySafeSyncTelemetryFailureCategory {
-        switch category {
-        case .network: .networkFlap
-        case .rateLimited: .rateLimited
-        case .quotaExceeded: .quotaExceeded
-        case .accountUnavailable: .accountUnavailable
-        default: .permissionDenied
-        }
-    }
-
-    private static func dataFailureCategory(_ category: SyncFailureCategory) -> PrivacySafeSyncTelemetryFailureCategory {
-        switch category {
-        case .validation: .validation
-        case .conflict: .conflict
-        case .malformedRemoteRecord: .malformedRemoteRecord
-        case .security: .security
-        default: .unknown
-        }
     }
 
     private static func telemetryOutcome(for receipt: SyncReceipt) -> PrivacySafeSyncTelemetryOutcome {

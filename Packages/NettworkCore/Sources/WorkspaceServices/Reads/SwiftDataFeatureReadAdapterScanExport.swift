@@ -5,6 +5,7 @@ import FeatureContracts
 import Foundation
 import ImportExport
 import NetworkModel
+import OSLog
 import Persistence
 import WorkspaceChangeControl
 
@@ -70,14 +71,26 @@ extension SwiftDataFeatureReadAdapter {
 
     func readProjection(in namespace: PersistenceNamespace) async throws -> MirrorProjection {
         guard namespace == account.namespace else { throw ProductionAdapterError.namespaceMismatch }
-        let records = try await reader.records(in: namespace, recordTypes: MirrorProjection.featureRecordTypes, limitPerType: recordLimitPerType)
+        let records = try await boundedFeatureRecords(in: namespace)
         let conflicts = try await persistence.unresolvedCases(in: namespace, limit: 200)
         let conflictResourceKeys = try await persistence.unresolvedConflictResourceKeys(in: namespace)
         let conflictCount = try await persistence.unresolvedConflictCount(in: namespace)
         let syncState = try await persistence.syncState(in: namespace)
-        return try MirrorProjection(
+        let projection = try MirrorProjection.quarantining(
             records: records, conflicts: conflicts, conflictResourceKeys: conflictResourceKeys, conflictCount: conflictCount, syncState: syncState
         )
+        if projection.quarantinedRecordCount > 0 {
+            Self.quarantineLog.warning("Skipped \(projection.quarantinedRecordCount, privacy: .public) unreadable mirror record(s) in a read projection.")
+        }
+        return projection
+    }
+
+    private func boundedFeatureRecords(in namespace: PersistenceNamespace) async throws -> [LocalMirrorRecord] {
+        do {
+            return try await reader.records(in: namespace, recordTypes: MirrorProjection.featureRecordTypes, limitPerType: recordLimitPerType)
+        } catch PersistenceStoreError.invalidReadLimit {
+            throw ProductionAdapterError.mirrorRecordLimitExceeded(recordLimitPerType)
+        }
     }
 
     private func completeCSVExportProjection() async throws -> MirrorProjection {

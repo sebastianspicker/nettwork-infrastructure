@@ -12,12 +12,18 @@ struct TransferScreen: View {
     @State var csvWorkspaceExportDocument: NettworkCSVWorkspaceDocument?
     @State var isArchiveExporterPresented = false
     @State var isCSVWorkspaceExporterPresented = false
-    @State var isArchiveImporterPresented = false
+    @State var isImporterPresented = false
+    /// Which flow the shared importer serves; kept after dismissal so the
+    /// completion handler can route the selection.
+    @State var importsCSVSelection = false
     @State var archiveSaveMessage: String?
     @State var csvExportHandoffMessage: String?
     @State var pendingCSVActivation: PendingCSVActivation?
     @State var pendingArchiveRestore: PendingArchiveRestore?
     let importDocument: (() -> CSVImportDocument?)?
+    /// Opens a user-selected CSV folder or `.nettworkcsv` package. Used when the
+    /// organization supplies no CSV document of its own.
+    let csvPackageSource: ((URL) throws -> any CSVImportSource)?
     let importAuthorization: (() -> AuthorizedOperationContext?)?
     let csvExportAuthorization: (() -> AuthorizedOperationContext?)?
     let csvExportDestination: (any CSVWorkspaceExportDestination)?
@@ -32,6 +38,7 @@ struct TransferScreen: View {
     @MainActor init(
         model: TransferFeatureViewModel,
         importDocument: (() -> CSVImportDocument?)? = nil,
+        csvPackageSource: ((URL) throws -> any CSVImportSource)? = nil,
         importAuthorization: (() -> AuthorizedOperationContext?)? = nil,
         csvExportAuthorization: (() -> AuthorizedOperationContext?)? = nil,
         csvExportDestination: (any CSVWorkspaceExportDestination)? = nil,
@@ -43,6 +50,7 @@ struct TransferScreen: View {
     ) {
         _model = State(initialValue: model)
         self.importDocument = importDocument
+        self.csvPackageSource = csvPackageSource
         self.importAuthorization = importAuthorization
         self.csvExportAuthorization = csvExportAuthorization
         self.csvExportDestination = csvExportDestination
@@ -92,11 +100,13 @@ struct TransferScreen: View {
                 defaultFilename: csvWorkspaceExportFilename,
                 onCompletion: completeCSVWorkspaceExport
             )
+            // One importer serves both flows: SwiftUI honours only one
+            // fileImporter per view, so the content types follow the request.
             .fileImporter(
-                isPresented: $isArchiveImporterPresented,
-                allowedContentTypes: [.nettworkArchive],
+                isPresented: $isImporterPresented,
+                allowedContentTypes: importsCSVSelection ? [.folder, .nettworkCSVWorkspace] : [.nettworkArchive],
                 allowsMultipleSelection: false,
-                onCompletion: selectArchiveForRestore
+                onCompletion: completeImportSelection
             )
     }
 
@@ -155,7 +165,7 @@ struct TransferScreen: View {
             Button("Review CSV import") { beginDryRun() }
                 .buttonStyle(.bordered)
                 .keyboardShortcut("d", modifiers: [.command])
-                .disabled(importDocument == nil || importAuthorization == nil || !model.canBeginCSVDryRun)
+                .disabled(!canReviewCSVImport)
                 .accessibilityIdentifier("transfer.csv.dry-run")
             switch model.csvState {
             case .idle: Text("Review the files first. Apply the validated import when you are ready.").foregroundStyle(.secondary)

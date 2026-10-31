@@ -151,7 +151,7 @@ extension IPAMWorkspaceScreen {
         switch state {
         case .loading: "Loading IPAM workspace state."
         case .ready: "IPAM workspace state is ready."
-        case .empty: "No IPAM records are available."
+        case .empty: "No IPAM records are available. Create a VRF to start."
         case .offline(let message), .pending(let message), .conflict(let message),
             .quarantined(let message), .permissionDenied(let message), .unavailable(let message):
             message
@@ -226,7 +226,12 @@ func IPAMPresentationStateMessage(state: InventoryPresentationState) -> some Vie
     case .loading, .ready:
         EmptyView()
     case .empty:
-        ContentUnavailableView("No IPAM records", systemImage: "network", description: Text("No VRFs or prefixes are available in this workspace."))
+        ContentUnavailableView(
+            "No IPAM records", systemImage: "network",
+            description: Text(
+                "No VRFs or prefixes are available in this workspace. "
+                    + "Use New VRF to create the first one, then add prefixes, addresses and VLANs.")
+        )
     case .pending(let message):
         Label(message, systemImage: IPAMWorkflowState.pending.symbolName)
             .foregroundStyle(IPAMWorkflowState.pending.tint)

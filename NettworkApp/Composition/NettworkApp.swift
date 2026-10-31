@@ -26,6 +26,7 @@ struct NettworkApp: App {
 
 private struct NettworkSceneRoot: View {
     @State private var launch: ProductionAppLaunchController
+    @Environment(\.scenePhase) private var scenePhase
     #if os(iOS)
         @State private var presentationContext = IOSPresentationContext()
     #endif
@@ -52,6 +53,13 @@ private struct NettworkSceneRoot: View {
                 #else
                     await launch.start(systemPlatformCapabilities: .system())
                 #endif
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                Task { await launch.sceneDidBecomeActive() }
+            }
+            .onDisappear {
+                Task { await launch.stop() }
             }
             .onOpenURL { launch.router.handle(url: $0) }
     }

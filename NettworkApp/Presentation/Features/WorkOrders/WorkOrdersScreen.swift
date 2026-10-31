@@ -1,6 +1,7 @@
 import ContentSafety
 import FeatureContracts
 import NetworkModel
+import PhotosUI
 import SwiftUI
 import WorkspaceChangeControl
 
@@ -11,6 +12,10 @@ struct WorkOrdersScreen: View {
     let authorization: OperationsAuthorization
     let evidenceSource: () -> (any OpaqueContentSource)?
     let evidenceAuthorization: () -> AuthorizedOperationContext?
+    /// Platform factories for a photo or file the user picks in-app when the
+    /// organization supplies no `evidenceSource`.
+    let pickedContent: PickedContentSources?
+    @State private var isChoosingEvidence = false
     @State private var cancellationReason = ""
     @State private var showCancellation = false
     @State private var cancellationResolutionReason = ""
@@ -27,6 +32,7 @@ struct WorkOrdersScreen: View {
         authorization: OperationsAuthorization,
         evidenceSource: @escaping () -> (any OpaqueContentSource)?,
         evidenceAuthorization: @escaping () -> AuthorizedOperationContext?,
+        pickedContent: PickedContentSources? = nil,
         cancellationReleaseAuthorization: @escaping (CancellationReleaseRequest) -> CancellationReleaseAuthorization? = { _ in nil },
         statusAnnouncer: any AccessibilityStatusAnnouncing = AccessibilityStatusAnnouncer()
     ) {
@@ -34,6 +40,7 @@ struct WorkOrdersScreen: View {
         self.authorization = authorization
         self.evidenceSource = evidenceSource
         self.evidenceAuthorization = evidenceAuthorization
+        self.pickedContent = pickedContent
         self.cancellationReleaseAuthorization = cancellationReleaseAuthorization
         self.statusAnnouncer = statusAnnouncer
     }
@@ -48,6 +55,7 @@ struct WorkOrdersScreen: View {
                     systemImage: "checklist"
                 )
             }
+            WorkOrderExistingSection(model: model, authorization: authorization)
             WorkOrderDraftSelectionSection(model: model)
             WorkOrderDraftFieldsSection(model: model)
             WorkOrderEvidenceSection(
@@ -63,6 +71,7 @@ struct WorkOrdersScreen: View {
             )
         }
         .navigationTitle("Work Orders")
+        .modifier(WorkOrderEvidencePicker(isChoosing: $isChoosingEvidence, onFile: selectEvidenceFile, onPhoto: selectEvidencePhoto))
         .overlay(alignment: .bottom) { phaseOverlay }
         .sheet(isPresented: $showCancellation) { cancellationSheet }
         .sheet(isPresented: $showCancellationResolution) { cancellationResolutionSheet }
@@ -98,8 +107,26 @@ struct WorkOrdersScreen: View {
     }
 
     private func prepareEvidence() {
-        guard let source = evidenceSource(), let authorization = evidenceAuthorization() else { return }
-        Task { await model.prepareEvidence(source: source, authorization: authorization) }
+        guard let authorization = evidenceAuthorization() else { return }
+        if let source = evidenceSource() {
+            Task { await model.prepareEvidence(source: source, authorization: authorization) }
+        } else if pickedContent != nil {
+            isChoosingEvidence = true
+        }
+    }
+
+    private func selectEvidenceFile(_ result: Result<[URL], Error>) {
+        guard let authorization = evidenceAuthorization(), let pickedContent else { return }
+        Task {
+            await model.preparePickedEvidence(
+                source: { try PickedContentSources.openSelection(result, open: pickedContent.file) },
+                authorization: authorization)
+        }
+    }
+
+    private func selectEvidencePhoto(_ item: PhotosPickerItem) {
+        guard let authorization = evidenceAuthorization(), let pickedContent else { return }
+        Task { await model.preparePickedEvidence(source: { try await pickedContent.photoSource(item) }, authorization: authorization) }
     }
 
     private func discardPreparedEvidence(_ item: WorkOrderEvidenceItem) {

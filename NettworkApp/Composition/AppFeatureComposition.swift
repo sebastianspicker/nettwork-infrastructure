@@ -12,6 +12,8 @@ import WorkspaceChangeControl
 @MainActor
 struct AppFeatureComposition {
     let inventory: InventoryExploreModel
+    /// Trace's own port picker; keeps Explore's filters, selection and recents untouched.
+    let traceInventory: InventoryExploreModel
     let topology: TopologyWorkspaceModel
     let trace: TraceInspectionModel
     let scan: ScanIntakeModel
@@ -52,6 +54,7 @@ struct AppFeatureComposition {
         capabilities: AppFeatureOptionalCapabilities
     ) {
         self.inventory = inventory
+        self.traceInventory = inventory.isolatedSearchModel()
         self.topology = topology
         self.trace = trace
         self.scan = scan
@@ -81,6 +84,8 @@ struct AppFeatureOptionalCapabilities {
     let attachmentAuthorization: (() -> AuthorizedOperationContext?)?
     let floorPlanPreviewAuthorization: (() -> AuthorizedOperationContext?)?
     let csvImportDocument: (() -> CSVImportDocument?)?
+    let csvPackageSource: ((URL) throws -> any CSVImportSource)?
+    let pickedContentSources: PickedContentSources?
     let importAuthorization: (() -> AuthorizedOperationContext?)?
     let csvExportAuthorization: (() -> AuthorizedOperationContext?)?
     let csvExportDestination: (any CSVWorkspaceExportDestination)?
@@ -171,7 +176,7 @@ private struct AppFeatureDestinationFactory {
         case .racks:
             return AnyView(TopologyWorkspaceScreen(model: composition.topology))
         case .trace:
-            return AnyView(TraceStartScreen(model: composition.trace, inventory: composition.inventory))
+            return AnyView(TraceStartScreen(model: composition.trace, inventory: composition.traceInventory))
         case .scan:
             return AnyView(ScanIntakeScreen(model: composition.scan))
         default:
@@ -231,6 +236,7 @@ private struct AppFeatureDestinationFactory {
                 model: composition.floorPlans,
                 authorization: composition.operationsAuthorization,
                 importSource: composition.capabilities.floorPlanImportSource,
+                pickedContent: composition.capabilities.pickedContentSources,
                 attachmentAuthorization: composition.capabilities.attachmentAuthorization,
                 previewAuthorization: composition.capabilities.floorPlanPreviewAuthorization,
                 objectDestination: objectDestination,
@@ -245,6 +251,7 @@ private struct AppFeatureDestinationFactory {
                 authorization: composition.operationsAuthorization,
                 evidenceSource: composition.workOrderEvidenceSource,
                 evidenceAuthorization: composition.workOrderEvidenceAuthorization,
+                pickedContent: composition.capabilities.pickedContentSources,
                 cancellationReleaseAuthorization: composition.cancellationReleaseAuthorization
             ))
     }
@@ -254,6 +261,7 @@ private struct AppFeatureDestinationFactory {
             TransferScreen(
                 model: composition.transfer,
                 importDocument: composition.capabilities.csvImportDocument,
+                csvPackageSource: composition.capabilities.csvPackageSource,
                 importAuthorization: composition.capabilities.importAuthorization,
                 csvExportAuthorization: composition.capabilities.csvExportAuthorization,
                 csvExportDestination: composition.capabilities.csvExportDestination,

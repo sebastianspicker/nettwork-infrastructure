@@ -13,6 +13,8 @@ enum ProductionMutationPlannerError: Error, Equatable, Sendable {
     case missingIPAMObject(ResourceKey)
     case staleIPAMRelationshipSet(ResourceKey)
     case invalidIPAMRelationshipSet(ResourceKey)
+    case ipamRecordAlreadyExists(ResourceKey)
+    case invalidIPAMCreation(ResourceKey)
     case missingFloorPlanAnchor(ResourceKey)
     case staleDeviceDecommission(ResourceKey)
     case legacyIntentRequiresReconciliation
@@ -40,7 +42,7 @@ actor SwiftDataProductionMutationPlanner: ProductionDraftSemanticValidating, Pro
             _ = try await plan(operations: draft.operations, workOrderID: draft.id, in: namespace)
             return []
         } catch {
-            return [String(describing: error)]
+            return [(error as? any LocalizedError)?.errorDescription ?? "The planned change failed validation against the current mirror."]
         }
     }
 

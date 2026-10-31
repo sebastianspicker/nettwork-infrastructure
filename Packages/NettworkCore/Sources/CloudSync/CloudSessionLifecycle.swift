@@ -84,6 +84,10 @@ public actor CloudSessionLifecycle {
         return .activated(next)
     }
 
+    /// Definitive failures (account mismatch or unavailable, revocation,
+    /// incompatible scope, any unclassified error) invalidate the session. A
+    /// `CloudVerificationUnavailableError` keeps the lease and open store so a
+    /// later call can re-verify; it is rethrown, so this call verifies nothing.
     @discardableResult
     public func verifyForegroundMembership(using authority: any CloudWorkspaceAuthority) async throws -> CloudSessionEvent {
         guard let previous = context else { return .invalidated }
@@ -122,6 +126,8 @@ public actor CloudSessionLifecycle {
     ) async throws -> CloudAccountIdentity {
         do {
             return try await authority.currentAccount()
+        } catch let unavailable as CloudVerificationUnavailableError {
+            throw unavailable
         } catch {
             await invalidateVerifiedSession(previous, expectedGeneration: generation)
             throw error
@@ -133,6 +139,8 @@ public actor CloudSessionLifecycle {
     ) async throws -> AccountContext? {
         do {
             return try await authority.verifyMembership(for: previous)
+        } catch let unavailable as CloudVerificationUnavailableError {
+            throw unavailable
         } catch {
             await invalidateVerifiedSession(previous, expectedGeneration: generation)
             throw error

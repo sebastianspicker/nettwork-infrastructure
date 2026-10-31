@@ -26,7 +26,7 @@ extension ProductionFeatureMutationAuthority {
         guard namespace == account.namespace else {
             throw ProductionFeatureMutationAuthorityError.namespaceMismatch
         }
-        guard let draft = await draftStore.draft(id: id, in: namespace) else {
+        guard let draft = try await draftStore.draft(id: id, in: namespace) else {
             throw ProductionFeatureMutationAuthorityError.workOrderMissing
         }
         return draft
@@ -200,7 +200,19 @@ extension ProductionFeatureMutationAuthority {
                 throw ProductionFeatureMutationAuthorityError.unsupportedDraft
             }
             return (.vlanMembership(memberships), Set([request.perVRFRevisionKey]).union(resourceKeys(for: memberships)))
+        case .createVRF, .createAddressRecord, .createVLAN:
+            return try creationStaging(request)
         }
+    }
+
+    /// Creation is scoped to the record's own revision key and carries only
+    /// well-formed records; duplicate, containment and reference rules are
+    /// enforced by the planner against the mirror at validation and completion.
+    private func creationStaging(_ request: IPAMWorkOrderRequest) throws -> (operation: PlannedIPAMOperation, resourceKeys: Set<ResourceKey>) {
+        guard let creation = request.operation.plannedCreation, creation.isWellFormed, request.perVRFRevisionKey == creation.revisionKey else {
+            throw ProductionFeatureMutationAuthorityError.unsupportedDraft
+        }
+        return (.create(creation), creation.resourceKeys)
     }
 
     private func prefixLayoutStaging(
@@ -262,7 +274,7 @@ extension ProductionFeatureMutationAuthority {
         )
         try requireStructurallyValid(draft)
         try await sessionAuthorizer.revalidate(trusted)
-        await draftStore.store(draft, in: namespace)
+        try await draftStore.store(draft, in: namespace)
         return draft.id
     }
 }
@@ -271,7 +283,7 @@ extension ProductionFeatureMutationAuthority {
     func finalizeStagedDraft(_ draft: WorkOrderDraft, trusted: TrustedProductionSession, in namespace: PersistenceNamespace) async throws -> ObjectID {
         try requireStructurallyValid(draft)
         try await sessionAuthorizer.revalidate(trusted)
-        await draftStore.store(draft, in: namespace)
+        try await draftStore.store(draft, in: namespace)
         return draft.id
     }
 }

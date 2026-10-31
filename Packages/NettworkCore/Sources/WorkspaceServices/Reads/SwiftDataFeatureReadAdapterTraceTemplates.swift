@@ -14,6 +14,7 @@ extension SwiftDataFeatureReadAdapter {
         let result = try DefaultPathTraceService.traceRich(
             from: portID, in: projection.topology, enrichment: projection.enrichment,
             limits: TraceTraversalLimits(maximumSegmentsPerPath: 256, maximumPaths: 64))
+        let wording = TraceWording(paths: result.paths)
         let branches = result.paths.prefix(64).map { path in
             let orderedNodes = direction == .reverse ? Array(path.nodes.reversed()) : path.nodes
             let orderedSegments = direction == .reverse ? Array(path.segments.reversed()) : path.segments
@@ -35,14 +36,14 @@ extension SwiftDataFeatureReadAdapter {
                     )
                 },
                 segments: orderedSegments.prefix(255).map { Self.traceSegmentSnapshot($0, topology: projection.topology) },
-                warnings: path.warnings.map { String(describing: $0) },
-                termination: String(describing: path.termination)
+                warnings: path.warnings.map(wording.warning),
+                termination: wording.termination(path.termination)
             )
         }
         return TraceInspectionSnapshot(
             startPortID: portID,
             branches: branches,
-            globalWarnings: ["Inspection direction: \(direction.rawValue)"] + result.warnings.map { String(describing: $0) },
+            globalWarnings: ["Inspection direction: \(direction.rawValue)"] + result.warnings.map(wording.warning),
             isStale: projection.syncState?.lastSuccessfulServerContact == nil,
             hasPendingWork: !projection.topology.plannedWork.isEmpty || projection.workOrders.contains { Self.isPending($0.status) },
             hasConflict: projection.conflictResourceKeys.contains(.object(portID))

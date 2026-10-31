@@ -18,6 +18,7 @@ struct IPAMWorkspaceScreen: View {
     @State var membershipVLANID: ObjectID?
     @State var membershipAction: VLANMembershipStagingAction = .add
     @State var pendingPrefixRemoval: IPAMPrefixSnapshot?
+    @State var creationSheet: IPAMRecordCreationKind?
     let statusAnnouncer: any AccessibilityStatusAnnouncing
 
     @MainActor init(
@@ -47,6 +48,7 @@ struct IPAMWorkspaceScreen: View {
             workflowLegend
             IPAMPresentationStateMessage(state: model.state)
             stagedWorkOrder
+            IPAMRecordCreationSection(model: model, presented: $creationSheet)
             vrfHierarchy
             prefixLayoutEditor
             addressAssignment
@@ -59,6 +61,9 @@ struct IPAMWorkspaceScreen: View {
         .task(id: focusedObject?.id) {
             guard await model.load(), !Task.isCancelled else { return }
             model.focus(on: focusedObject)
+        }
+        .sheet(item: $creationSheet) { kind in
+            IPAMRecordCreationSheet(model: model, kind: kind)
         }
         .confirmationDialog(
             "Stage prefix removal?",

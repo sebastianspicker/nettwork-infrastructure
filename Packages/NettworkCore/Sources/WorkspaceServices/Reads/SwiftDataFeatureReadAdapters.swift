@@ -66,6 +66,8 @@ public protocol ProductionFeatureMutationAuthorizing: Sendable {
         in namespace: PersistenceNamespace
     ) async throws -> ObjectID
     func exportImmutableAudit(authorization: AuthorizedOperationContext, in namespace: PersistenceNamespace) async throws -> URL
+    func stagedDrafts(in namespace: PersistenceNamespace) async throws -> [WorkOrderDraft]
+    func reopenWorkOrder(id: ObjectID, authorization: OperationsAuthorization, in namespace: PersistenceNamespace) async throws -> ReopenedWorkOrder
 }
 
 public protocol ProductionForegroundSynchronizing: Sendable {
@@ -82,6 +84,8 @@ enum ProductionAdapterError: LocalizedError {
     case invalidExportAuthorization
     case malformedAuthoritativeMirrorRecord(ResourceKey, String)
     case mirrorRecordIdentityMismatch(ResourceKey, String)
+    case mirrorRecordLimitExceeded(Int)
+    case quarantinedRecordsBlockProjection(Int)
 
     var errorDescription: String? {
         switch self {
@@ -91,6 +95,10 @@ enum ProductionAdapterError: LocalizedError {
             "The authoritative \(recordType) mirror record \(resourceKey.description) is malformed."
         case let .mirrorRecordIdentityMismatch(resourceKey, recordType):
             "The authoritative \(recordType) mirror record \(resourceKey.description) has a mismatched resource identity."
+        case let .mirrorRecordLimitExceeded(limit):
+            "The local mirror holds more than the supported record limit of \(limit) for one record type, so it cannot be shown completely."
+        case let .quarantinedRecordsBlockProjection(count):
+            "\(count) mirror record(s) could not be read, and other records depend on them, so this view cannot be shown reliably."
         }
     }
 }

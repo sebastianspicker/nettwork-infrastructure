@@ -3,9 +3,7 @@ import Foundation
 import WorkspaceServices
 
 struct ProductionRuntimeCloudGraph {
-    let batchSource: CloudKitSyncEngineBatchSourceAdapter
-    let syncDriver: CloudKitStatefulSyncEngineDriver
-    let transport: CloudKitRecordTransport
+    let transport: any ProductionRuntimeRecordTransport
     let exactMutationState: CloudExactAuthoritativeMutationStateProvider
     let mutationRepository: CloudAuthoritativeMutationRepository
     let stagedTransferRepository: CloudStagedTransferRepository
@@ -14,26 +12,45 @@ struct ProductionRuntimeCloudGraph {
     let stagedTransferGC: CloudStagedTransferGarbageCollector?
 }
 
+/// The selected backend's transport. Staged-transfer GC is offered only by
+/// backends that implement its transport; others leave it nil and fail closed.
+struct ProductionRuntimeBackendTransport {
+    let transport: any ProductionRuntimeRecordTransport
+    let garbageCollection: (any CloudStagedTransferGCTransport)?
+}
+
 extension ProductionRuntimeAssembly {
+    private static func makeTransport(_ input: OrganizationInput, foundation: ProductionRuntimeFoundation) async throws -> ProductionRuntimeBackendTransport {
+        switch input.cloudWorkspace.backend {
+        case .cloudKit(let cloudKit):
+            let batchSource = try CloudKitSyncEngineBatchSourceAdapter(
+                database: CloudKitProductionBoundary.database(
+                    in: cloudKit.cloudKitContainer,
+                    account: input.cloudWorkspace.account
+                ),
+                namespace: input.cloudWorkspace.account.namespace,
+                persistedState: try await foundation.stateStore.persistedState(in: input.cloudWorkspace.account.namespace),
+                identityIndex: foundation.identityIndex,
+                maximumRecordNameIdentities: input.cloudWorkspace.maximumRecordNameIdentities,
+                subscriptionID: cloudKit.cloudKitSubscriptionID
+            )
+            // The transport retains the driver, which retains the batch source.
+            let syncDriver = CloudKitStatefulSyncEngineDriver(source: batchSource, durableState: foundation.stateStore)
+            let transport = CloudKitRecordTransport(
+                container: cloudKit.cloudKitContainer,
+                account: input.cloudWorkspace.account,
+                engine: syncDriver,
+                stateStore: foundation.stateStore
+            )
+            return ProductionRuntimeBackendTransport(transport: transport, garbageCollection: transport)
+        case .local(let local):
+            return ProductionRuntimeBackendTransport(transport: try await local.makeTransport(foundation.stateStore), garbageCollection: nil)
+        }
+    }
+
     static func makeRuntimeCloudGraph(_ input: OrganizationInput, foundation: ProductionRuntimeFoundation) async throws -> ProductionRuntimeCloudGraph {
-        let batchSource = try CloudKitSyncEngineBatchSourceAdapter(
-            database: CloudKitProductionBoundary.database(
-                in: input.cloudWorkspace.cloudKitContainer,
-                account: input.cloudWorkspace.account
-            ),
-            namespace: input.cloudWorkspace.account.namespace,
-            persistedState: try await foundation.stateStore.persistedState(in: input.cloudWorkspace.account.namespace),
-            identityIndex: foundation.identityIndex,
-            maximumRecordNameIdentities: input.cloudWorkspace.maximumRecordNameIdentities,
-            subscriptionID: input.cloudWorkspace.cloudKitSubscriptionID
-        )
-        let syncDriver = CloudKitStatefulSyncEngineDriver(source: batchSource, durableState: foundation.stateStore)
-        let transport = CloudKitRecordTransport(
-            container: input.cloudWorkspace.cloudKitContainer,
-            account: input.cloudWorkspace.account,
-            engine: syncDriver,
-            stateStore: foundation.stateStore
-        )
+        let backendTransport = try await makeTransport(input, foundation: foundation)
+        let transport = backendTransport.transport
         let exactMutationState = CloudExactAuthoritativeMutationStateProvider(reader: transport, account: input.cloudWorkspace.account)
         let mutationRepository = CloudAuthoritativeMutationRepository(transport: transport, stateProvider: exactMutationState)
         let stagedTransferRepository = CloudStagedTransferRepository(transport: transport, reader: transport)
@@ -49,10 +66,13 @@ extension ProductionRuntimeAssembly {
             actorContextProvider: input.cloudWorkspace.actorContextProvider,
             mutationStateProvider: exactMutationState
         )
-        let garbageCollector = input.cloudWorkspace.stagedTransferGCPolicy.map {
-            CloudStagedTransferGarbageCollector(
-                policy: $0,
-                transport: transport,
+        let garbageCollector = try input.cloudWorkspace.stagedTransferGCPolicy.map { policy in
+            guard let gcTransport = backendTransport.garbageCollection else {
+                throw ProductionRuntimeAssemblyError.invalidConfiguration("stagedTransferGCPolicy")
+            }
+            return CloudStagedTransferGarbageCollector(
+                policy: policy,
+                transport: gcTransport,
                 authorizer: ProductionStagedTransferGCAuthorizer(
                     account: input.cloudWorkspace.account,
                     sessionAuthorizer: foundation.sessionAuthorizer
@@ -60,8 +80,6 @@ extension ProductionRuntimeAssembly {
             )
         }
         return ProductionRuntimeCloudGraph(
-            batchSource: batchSource,
-            syncDriver: syncDriver,
             transport: transport,
             exactMutationState: exactMutationState,
             mutationRepository: mutationRepository,

@@ -244,6 +244,8 @@ public actor ProductionCorrectiveDraftBuilder: ProductionCorrectiveDraftBuilding
             return addressAssignmentResourceKeys(assignments)
         case let .vlanMembership(memberships):
             return vlanMembershipResourceKeys(memberships)
+        case let .create(creation):
+            return creation.resourceKeys
         case let .legacyAddressAssignment(addressKey, interfaceID):
             return [addressKey, .object(interfaceID)]
         case let .legacyVLANMembership(interfaceID, vlanID, _):

@@ -110,6 +110,9 @@ open Nettwork.xcodeproj
 ```
 
 Choose `Nettwork macOS` to run on Mac or `Nettwork` for an iOS Simulator.
+To try the app offline with a workspace stored on the device, choose
+`Nettwork Alpha Local` (iOS) or `Nettwork macOS Alpha Local` instead; see
+[Alpha Local runtime](docs/CONFIGURATION.md#alpha-local-runtime).
 `project.yml` defines the targets and settings; regenerate the project after
 changing it. The generated `.xcodeproj` is ignored by Git.
 
@@ -134,8 +137,8 @@ access policies, and a configuration provider compiled into the app.
 
 Start with [Production configuration](docs/CONFIGURATION.md). This integration
 requires application code as well as build settings. An `.env` file alone does
-not configure the app, and an offline startup does not create a usable local
-workspace.
+not configure the app, and an unconfigured startup does not create a usable
+local workspace; only the Alpha Local configuration does.
 
 ## Repository guide
 

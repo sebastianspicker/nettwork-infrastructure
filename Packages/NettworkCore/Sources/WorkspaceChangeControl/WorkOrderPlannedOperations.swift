@@ -16,6 +16,7 @@ public enum PlannedIPAMOperation: Codable, Hashable, Sendable {
     case prefixLayout(vrf: VRF, expectedRevision: Int, currentPrefixes: [Prefix], desiredPrefixes: [Prefix])
     case addressAssignment(InterfaceAddressAssignmentSet)
     case vlanMembership(InterfaceVLANMembershipSet)
+    case create(PlannedIPAMCreation)
     /// Decode-only v1 shapes. They retain the acknowledged digest for archive
     /// and reconciliation, but the production planner refuses to execute them
     /// because they do not bind a complete relationship set.
@@ -23,9 +24,9 @@ public enum PlannedIPAMOperation: Codable, Hashable, Sendable {
     case legacyVLANMembership(interfaceID: ObjectID, vlanID: ObjectID, isNative: Bool)
 
     private enum CodingKeys: String, CodingKey {
-        case kind, vrf, expectedRevision, currentPrefixes, desiredPrefixes, assignments, memberships, addressKey, interfaceID, vlanID, isNative
+        case kind, vrf, expectedRevision, currentPrefixes, desiredPrefixes, assignments, memberships, addressKey, interfaceID, vlanID, isNative, creation
     }
-    private enum Kind: String, Codable { case prefixLayout, addressAssignment, vlanMembership }
+    private enum Kind: String, Codable { case prefixLayout, addressAssignment, vlanMembership, create }
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         switch try container.decode(Kind.self, forKey: .kind) {
@@ -54,6 +55,7 @@ public enum PlannedIPAMOperation: Codable, Hashable, Sendable {
                     isNative: try container.decode(Bool.self, forKey: .isNative)
                 )
             }
+        case .create: self = .create(try container.decode(PlannedIPAMCreation.self, forKey: .creation))
         }
     }
     public func encode(to encoder: Encoder) throws {
@@ -71,6 +73,9 @@ public enum PlannedIPAMOperation: Codable, Hashable, Sendable {
         case let .vlanMembership(memberships):
             try container.encode(Kind.vlanMembership, forKey: .kind)
             try container.encode(memberships, forKey: .memberships)
+        case let .create(creation):
+            try container.encode(Kind.create, forKey: .kind)
+            try container.encode(creation, forKey: .creation)
         case let .legacyAddressAssignment(addressKey, interfaceID):
             try container.encode(Kind.addressAssignment, forKey: .kind)
             try container.encode(addressKey, forKey: .addressKey)

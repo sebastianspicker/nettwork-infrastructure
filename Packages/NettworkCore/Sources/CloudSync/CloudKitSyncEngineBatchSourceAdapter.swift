@@ -32,12 +32,13 @@
         private let maximumBatchRecords: Int
         private let maximumBatchBytes: Int
         private let delegate: CloudKitSyncEngineBatchSourceDelegate
-        private let engine: CKSyncEngine
+        private let subscriptionID: CKSubscription.ID?
+        private var engine: CKSyncEngine
         private var confirmedPersistedState: Data?
         private var pendingMirrorState: Data?
         private var stateVersion: UInt64 = 0
         private var activeFetch: ActiveFetch?
-        private var terminalFailure: CloudKitSyncEngineBatchSourceError?
+        private var failures = CloudKitBatchSourceFailureState()
 
         var configuredZoneID: CKRecordZone.ID { zoneID }
 
@@ -59,12 +60,6 @@
                 throw CloudKitSyncEngineBatchSourceError.invalidBatchAdmissionLimit
             }
             let delegate = CloudKitSyncEngineBatchSourceDelegate()
-            var configuration = CKSyncEngine.Configuration(
-                database: database,
-                stateSerialization: try CloudKitSyncEngineStateCodec.decode(persistedState), delegate: delegate)
-            configuration.automaticallySync = false
-            configuration.subscriptionID = subscriptionID
-
             self.database = database
             self.namespace = namespace
             self.zoneID = CloudKitProductionBoundary.zoneID(for: namespace)
@@ -73,7 +68,9 @@
             self.maximumBatchRecords = maximumBatchRecords
             self.maximumBatchBytes = maximumBatchBytes
             self.delegate = delegate
-            self.engine = CKSyncEngine(configuration)
+            self.subscriptionID = subscriptionID
+            self.engine = try CloudKitSyncEngineStateCodec.makeEngine(
+                database: database, persistedState: persistedState, delegate: delegate, subscriptionID: subscriptionID)
             self.confirmedPersistedState = persistedState
             delegate.install(owner: self)
         }
@@ -84,27 +81,48 @@
         /// fetch.
         public func ensureSubscription(in database: CKDatabase, namespace: PersistenceNamespace) async throws {
             try requireExactBinding(database: database, namespace: namespace)
-            try throwIfTerminalFailure()
+            try failures.throwIfTerminal()
         }
 
         public func fetchChanges(
             in database: CKDatabase, namespace: PersistenceNamespace, persistedState: Data?
         ) async throws -> CloudChangeBatch {
             try requireExactBinding(database: database, namespace: namespace)
-            try throwIfTerminalFailure()
+            try failures.throwIfTerminal()
             try acknowledgeAppliedStateIfPresent(persistedState)
             guard activeFetch == nil else { throw CloudKitSyncEngineBatchSourceError.overlappingFetch }
             guard persistedState == confirmedPersistedState else {
                 throw CloudKitSyncEngineBatchSourceError.persistedStateMismatch
             }
+            try restartEngineIfRequired()
+            do {
+                return try await fetchFromEngine()
+            } catch {
+                failures.requireEngineRestart()
+                throw error
+            }
+        }
 
+        /// The next fetch restarts from the last durably applied state; quarantine is untouched.
+        public func discardFetchedState(_ state: Data, in namespace: PersistenceNamespace) async {
+            guard namespace == self.namespace, pendingMirrorState == state else { return }
+            pendingMirrorState = nil
+            failures.requireEngineRestart()
+        }
+
+        /// A failed or discarded fetch may have advanced the engine's in-memory
+        /// cursor past changes that never reached the mirror; rebuild it from the
+        /// confirmed durable state so they are fetched again rather than skipped.
+        private func restartEngineIfRequired() throws {
+            guard failures.requiresEngineRestart else { return }
+            engine = try CloudKitSyncEngineStateCodec.makeEngine(
+                database: database, persistedState: confirmedPersistedState, delegate: delegate, subscriptionID: subscriptionID)
+            failures.engineRestarted()
+        }
+
+        private func fetchFromEngine() async throws -> CloudChangeBatch {
             activeFetch = ActiveFetch(
-                stateVersionAtStart: stateVersion,
-                admission: try CloudKitFetchAdmission(
-                    maximumRecords: maximumBatchRecords,
-                    maximumBytes: maximumBatchBytes
-                )
-            )
+                stateVersionAtStart: stateVersion, admission: try CloudKitFetchAdmission(maximumRecords: maximumBatchRecords, maximumBytes: maximumBatchBytes))
             do {
                 try await engine.fetchChanges(.init(scope: .zoneIDs([zoneID])))
             } catch {
@@ -131,7 +149,9 @@
             return CloudChangeBatch(records: records, newState: latestState)
         }
 
-        func receive(_ event: CKSyncEngine.Event) async {
+        func receive(_ event: CKSyncEngine.Event, from syncEngine: CKSyncEngine) async {
+            // A retired engine's late callbacks must not touch the current fetch.
+            guard syncEngine === engine else { return }
             switch event {
             case .fetchedDatabaseChanges, .willFetchRecordZoneChanges, .didFetchRecordZoneChanges, .fetchedRecordZoneChanges:
                 await receiveRecordFetchEvent(event)
@@ -345,12 +365,8 @@
             }
         }
 
-        private func throwIfTerminalFailure() throws {
-            if let terminalFailure { throw terminalFailure }
-        }
-
         private func failClosed(_ error: CloudKitSyncEngineBatchSourceError) {
-            if terminalFailure == nil { terminalFailure = error }
+            failures.record(error)
             if var activeFetch, activeFetch.failure == nil {
                 activeFetch.failure = error
                 activeFetch.latestState = nil

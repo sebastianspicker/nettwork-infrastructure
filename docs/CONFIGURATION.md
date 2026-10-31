@@ -57,6 +57,52 @@ An absent provider is a supported unconfigured state. A blank/malformed value,
 unresolvable class, invalid organization input, or startup failure produces a
 visible failure and no production feature graph.
 
+## Alpha Local runtime
+
+The `Release Alpha Local` build configuration (`Config/AlphaLocal.xcconfig`,
+Release-based) sets `NETTWORK_PRODUCTION_CONFIGURATION_PROVIDER` to the in-repo
+`NettworkLocalRuntimeProvider`. `Config/Base.xcconfig` stays empty, so Debug and
+Release builds remain unconfigured. Build it with the `Nettwork Alpha Local`
+(iOS) or `Nettwork macOS Alpha Local` scheme after `make generate`, or:
+
+```sh
+make generate
+xcodebuild -project Nettwork.xcodeproj -scheme 'Nettwork Alpha Local' \
+  -configuration 'Release Alpha Local' \
+  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+```
+
+What the local runtime does:
+
+- Runs fully offline. The authoritative records live in a durable file store on
+  the device; nothing is sent to CloudKit or any other service, and the
+  SwiftData mirror has CloudKit sync disabled.
+- Creates one local identity and one owner-private workspace on first launch and
+  reuses them afterwards. The single local user is the workspace administrator;
+  that role exists only through this provider and is still re-verified against
+  the persisted identity on every privileged operation.
+- Starts with an empty workspace. Add data with a CSV import or an archive
+  restore from the Transfer screen; floor plans, evidence, CSV folders and
+  archives are picked in the app, and CSV exports use the in-app file exporter.
+- Keeps everything below Application Support `Nettwork/LocalRuntime/v1/`:
+  `identity.json`, `workspaces/<workspaceID>/server/` (record store),
+  `workspaces/<workspaceID>/mirror.store`, `workspaces/<workspaceID>/history/`
+  (Favorites and Recents), `workspaces/<workspaceID>/drafts/` (staged work-order
+  drafts, kept across relaunches), `attachments/`,
+  `staging/{attachments,csv,restore}/`, `audit/` and `exports/audit/`
+  (published audit exports, never overwritten). On iOS these directories use
+  the `completeUntilFirstUserAuthentication` protection class.
+
+What it does not do:
+
+- No sharing, invitations or second user; share acceptance fails with a typed
+  error. No staged-transfer garbage collection, and corrective resolutions are
+  unavailable.
+- No backup or sync between devices. Deleting the app deletes the workspace;
+  a damaged `identity.json` stops startup instead of being replaced.
+- It is not the stage-2 iCloud deployment. A CloudKit workspace still needs an
+  organization configuration provider, as described below.
+
 ## Required organization input
 
 The complete source contract is
@@ -65,7 +111,7 @@ groups the required inputs as follows:
 
 | Group | Required responsibilities |
 | --- | --- |
-| Workspace storage | SwiftData `ModelContainer`; distinct attachment, attachment-staging, CSV-staging, archive-restore, and audit directories; staging lifetime/protection; staged work-order draft store |
+| Workspace storage | SwiftData `ModelContainer`; distinct attachment, attachment-staging, CSV-staging, archive-restore, audit, and history directories (the history directory holds the per-account, per-workspace Favorites and Recents JSON files: object IDs only, at most 50 recents and 500 favorites; a damaged file starts empty and is moved aside to `*.corrupt` on the next write); staging lifetime/protection; staged work-order draft store |
 | Cloud workspace | Account/workspace identity; `CKContainer`; optional subscription; record/staged-asset bounds; approved staged-transfer cleanup policy; workspace context/share/bootstrap services; actor and installation identity; remote record validator |
 | Telemetry | Non-empty subsystem; retention policy; privacy-safe external signal provider and metrics store |
 | Operation governance | Bounded-operation policies and budgets; measurement sink; work-order and attachment policies; corrective-resolution provider; audit destination; archive verifier; floor-plan work metadata |
