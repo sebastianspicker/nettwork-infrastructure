@@ -152,3 +152,10 @@ xcuserdata/
 # Test sources (not published)
 /Tests/
 /Packages/NettworkCore/Tests/
+
+# Local maintenance and private review records
+/THINGS_TO_DO_LEDGER.md
+/ALPHA_AUDIT_REPORT.md
+/ALPHA_AUDIT_LEDGER.md
+/ALPHA_IMPLEMENTATION_LEDGER.md
+/ALPHA_PR_DESCRIPTION.md

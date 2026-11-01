@@ -54,6 +54,8 @@ The generated schemes are:
 
 - `Nettwork`: iOS application
 - `Nettwork macOS`: macOS application
+- `Nettwork Alpha Local`: iOS application with the local alpha workspace
+- `Nettwork macOS Alpha Local`: macOS application with the local alpha workspace
 
 ## Validation commands
 
@@ -219,3 +221,16 @@ The separate Pages workflow installs the same locked Node toolchain on Ubuntu,
 runs `make check-web` and uploads `site/`. Repository
 Pages enablement, the deployed URL, and production availability are external
 state and are not verified by these workflows.
+
+## CI and demo publication
+
+General source, package and native-build checks run automatically for
+Dependabot-authored pull requests. Use manual dispatch for other changes.
+The dependency security audit remains automatic on pushes, all pull requests,
+a weekly schedule and manual runs. The existing weekly Dependabot configuration
+covers npm tooling and GitHub Actions.
+
+The Pages workflow validates and publishes the sample-data demo only after a
+manual dispatch on `main`. It does not deploy a native workspace or configure
+CloudKit access. Private audit and task records stay ignored; live workspace
+and physical-device verification remain separate from these build checks.

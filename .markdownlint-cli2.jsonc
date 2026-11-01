@@ -1,0 +1,8 @@
+{
+  "gitignore": true,
+  "config": {
+    "MD033": {
+      "allowed_elements": ["details", "summary"]
+    }
+  }
+}

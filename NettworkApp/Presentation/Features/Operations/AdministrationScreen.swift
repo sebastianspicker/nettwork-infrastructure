@@ -68,7 +68,7 @@ final class WorkspaceAdministrationViewModel {
     }
 
     private func perform<Value>(
-        operation: () async throws -> Value,
+        operation: @MainActor () async throws -> Value,
         receive: (Value) -> Void
     ) async -> Value? {
         guard !isPerformingAction else { return nil }

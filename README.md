@@ -9,6 +9,23 @@ connects. It brings equipment inventory, cable paths, racks, floor plans, IP
 address management (IPAM), and work orders into a SwiftUI app for iPhone, iPad,
 and Mac.
 
+<details>
+<summary>Status and limitations</summary>
+
+Nettwork is an independent experimental project for network inventory and
+infrastructure documentation. Developed independently alongside my main
+professional work. The source remains a template to review and adapt, rather
+than a ready-to-deploy management product. The browser demo uses sample
+data; the default native app needs an organization-provided CloudKit
+workspace, configuration and access policies.
+
+**Disclaimer.** The demo does not validate a production workspace, its
+access controls or its data. Check synchronization, permissions and recovery
+in your own environment before relying on it, and take responsibility for
+the inventory and operational decisions you make from it.
+
+</details>
+
 The native app requires an organization-provided CloudKit workspace and
 configuration. This repository contains the source and a separate browser demo
 with sample data. A default native build opens without a connected workspace;
@@ -33,6 +50,17 @@ Configured native builds use CloudKit for shared workspace state and SwiftData
 for the local mirror and pending changes. See the
 [architecture guide](docs/ARCHITECTURE.md) for the data model, authorization,
 and synchronization behavior.
+
+```mermaid
+flowchart LR
+    Demo[Browser demo with sample data] --> Explore[Explore inventory and connections]
+    Native[Configured native app] --> Local[Local workspace mirror]
+    Local <--> Cloud[Organization CloudKit workspace]
+    Native --> Work[Document assets and plan work orders]
+```
+
+The browser demo and the organization's native workspace are separate. The
+demo is a way to explore the interface without connecting production data.
 
 ## Try the browser demo
 
