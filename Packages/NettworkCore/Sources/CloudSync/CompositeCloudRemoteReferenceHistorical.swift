@@ -64,6 +64,27 @@ extension CompositeCloudRemoteReferenceValidator {
         return eligible
     }
 
+    /// A verified activation is a settled fact: later edits of its members are
+    /// ordinary (`.live`) changes, validated like any other record. Verification
+    /// re-opens only when the candidate deletes the workspace record, rewrites it
+    /// away from exactly this commit, or writes a `.staged` member of this transfer
+    /// that differs from the stored one (a sealed set must not change).
+    static func candidate(
+        _ candidate: [CloudRecordEnvelope], changesActivation commit: WorkspaceActivationCommit, stored: [ResourceKey: CloudRecordEnvelope]
+    ) -> Bool {
+        candidate.contains { envelope in
+            if envelope.visibility == .staged(transferID: commit.transferID) {
+                guard let old = stored[envelope.resourceKey] else { return true }
+                return CloudStagedTransferCommitment.member(old) != CloudStagedTransferCommitment.member(envelope)
+            }
+            guard envelope.recordType == CloudRecordNaming.workspaceRecordType else { return false }
+            guard !envelope.isDeleted, let workspace = try? CloudDeterministicCoding.decode(CloudWorkspaceRecord.self, from: envelope.payload),
+                case let .active(candidateCommit) = workspace.lifecycle
+            else { return true }
+            return candidateCommit != commit
+        }
+    }
+
     private func eligibleActiveTransferID(
         for workspaceEnvelope: CloudRecordEnvelope, in envelopes: [CloudRecordEnvelope]
     ) throws -> ObjectID? {

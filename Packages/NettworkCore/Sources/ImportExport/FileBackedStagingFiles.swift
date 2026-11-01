@@ -4,9 +4,29 @@ import WorkspaceChangeControl
 
 enum FileBackedStagingFiles {
     static func ensureNewPrivateDirectory(_ url: URL) throws {
+        try createNewPrivateDirectory(url) {}
+    }
+
+    /// Creates `url` (which must not exist yet) and runs `populate`. If anything after the
+    /// creation fails, only that exact directory is removed (never a symlink), so a failed
+    /// sidecar write cannot block the operation ID forever.
+    static func createNewPrivateDirectory(_ url: URL, populate: () throws -> Void) throws {
         guard !FileManager.default.fileExists(atPath: url.path) else { throw FileBackedStagingError.invalidRoot }
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
-        try applyPrivateAttributes(to: url)
+        do {
+            try applyPrivateAttributes(to: url)
+            try populate()
+        } catch {
+            if (try? validateDirectory(url)) != nil { try? FileManager.default.removeItem(at: url) }
+            throw error
+        }
+    }
+
+    /// An existing staging directory must carry a sidecar; an orphan is reported, never deleted here.
+    static func requireSidecar(_ url: URL) throws {
+        guard (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
+            throw FileBackedStagingError.invalidStagingHandle
+        }
     }
 
     static func ensurePrivateDirectory(_ url: URL) throws {

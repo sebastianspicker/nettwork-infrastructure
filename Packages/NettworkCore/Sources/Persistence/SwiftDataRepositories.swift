@@ -4,54 +4,6 @@ import SwiftData
 import WorkspaceChangeControl
 
 extension SwiftDataPersistenceStore {
-    public func topology(in namespace: PersistenceNamespace) async throws -> PhysicalTopology {
-        try validateActiveLease(for: namespace)
-        let records = try mirrorModels(namespaceKey: PersistenceNamespaceKey.value(for: namespace))
-            .map { try decodeMirror($0, namespace: namespace) }
-            .filter { try $0.recordType == LocalRecordKind.physicalTopology && !$0.isTombstone && isVisibleToFeatureProjection($0, in: namespace) }
-        guard let newest = records.max(by: { $0.serverModifiedAt < $1.serverModifiedAt }) else { return PhysicalTopology() }
-        guard let payload = newest.payload else { throw PersistenceStoreError.malformedStoredValue("topology payload") }
-        return try PersistenceCoding.decode(PhysicalTopology.self, from: payload)
-    }
-
-    public func prefixes(in vrfID: ObjectID, namespace: PersistenceNamespace) async throws -> [Prefix] {
-        try validateActiveLease(for: namespace)
-        return try mirrorModels(namespaceKey: PersistenceNamespaceKey.value(for: namespace))
-            .map { try decodeMirror($0, namespace: namespace) }
-            .filter { try $0.recordType == LocalRecordKind.prefix && !$0.isTombstone && isVisibleToFeatureProjection($0, in: namespace) }
-            .compactMap { record -> Prefix? in
-                guard let payload = record.payload else { throw PersistenceStoreError.malformedStoredValue("prefix payload") }
-                let prefix = try PersistenceCoding.decode(Prefix.self, from: payload)
-                return prefix.vrfID == vrfID ? prefix : nil
-            }
-            .sorted { $0.cidr < $1.cidr }
-    }
-
-    public func workOrder(id: ObjectID, namespace: PersistenceNamespace) async throws -> WorkOrder? {
-        try validateActiveLease(for: namespace)
-        guard let record = try localMirror(for: .object(id), in: namespace),
-            record.recordType == LocalRecordKind.workOrder,
-            !record.isTombstone,
-            let payload = record.payload
-        else { return nil }
-        return try PersistenceCoding.decode(WorkOrder.self, from: payload)
-    }
-
-    public func auditEvents(for resourceKey: ResourceKey, namespace: PersistenceNamespace) async throws -> [AuditEvent] {
-        try validateActiveLease(for: namespace)
-        return try mirrorModels(namespaceKey: PersistenceNamespaceKey.value(for: namespace))
-            .map { try decodeMirror($0, namespace: namespace) }
-            .filter { try $0.recordType == LocalRecordKind.auditEvent && !$0.isTombstone && isVisibleToFeatureProjection($0, in: namespace) }
-            .compactMap { record -> AuditEvent? in
-                guard let payload = record.payload else { throw PersistenceStoreError.malformedStoredValue("audit payload") }
-                let event = try PersistenceCoding.decode(AuditEvent.self, from: payload)
-                return event.affectedResourceKeys.contains(resourceKey) ? event : nil
-            }
-            .sorted { $0.occurredAt > $1.occurredAt }
-    }
-
-    // MARK: AttachmentStore
-
     /// Stores bytes whose content-safety checks have already completed under
     /// the evidence identifier that was bound into the authoritative intent.
     /// This is deliberately separate from the generic attachment store, which

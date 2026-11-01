@@ -74,7 +74,7 @@ public struct AuthorizedArchiveExportService: Sendable {
     ) throws -> (count: Int, headSHA256: String) {
         let verifiedAudit = try ArchiveAuditChain.verify(input.auditJSONL)
         let recordCount = try ArchiveManifestRecordCounts.total(input.recordCounts)
-        guard try jsonlCount(input.recordsJSONL) == recordCount,
+        guard try ArchiveEntryValidation.countJSONL(input.recordsJSONL) == recordCount,
             verifiedAudit.count <= WorkspaceTransferLimits.maximumRows,
             input.auditHeadSHA256 == verifiedAudit.headSHA256
         else {
@@ -137,17 +137,5 @@ public struct AuthorizedArchiveExportService: Sendable {
         else {
             throw ImportAuthorizationError.staleContext
         }
-    }
-
-    private func jsonlCount(_ data: Data) throws -> Int {
-        var count = 0
-        for byte in data where byte == 0x0A {
-            let (nextCount, overflow) = count.addingReportingOverflow(1)
-            guard !overflow, nextCount <= WorkspaceTransferLimits.maximumRows else {
-                throw ArchiveValidationError.manifestMismatch
-            }
-            count = nextCount
-        }
-        return count
     }
 }

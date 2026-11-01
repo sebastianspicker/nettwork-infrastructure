@@ -109,7 +109,8 @@ public enum TemplateMigration {
         templatePortID: ObjectID, source: PortTemplate, target: PortTemplate, installed: [ObjectID: Port], deviceID: ObjectID, cables: [Cable]
     ) throws -> TemplatePortMigrationImpact {
         let current = try installedPort(templatePortID, installed: installed, deviceID: deviceID)
-        let desired = try materializedPort(id: current.id, deviceID: deviceID, template: target, customFields: current.customFields)
+        let desired = try materializedPort(
+            id: current.id, deviceID: deviceID, template: target, customFields: current.customFields, availability: current.availability)
         let changed = source != target || current != desired
         return TemplatePortMigrationImpact(
             templatePortID: templatePortID, action: changed ? .reconfigure : .retain, requiresCableReview: changed, currentPort: current, desiredPort: desired,
@@ -133,12 +134,12 @@ public enum TemplateMigration {
 
     private static func materializedPort(
         id: ObjectID, deviceID: ObjectID, template: PortTemplate,
-        customFields: [CustomFieldValue]
+        customFields: [CustomFieldValue], availability: PortAvailability = .available
     ) throws -> Port {
         Port(
             id: id, deviceID: deviceID, templatePortID: template.id, label: template.name,
             medium: template.medium, connector: template.connector, face: template.face,
-            fiberMode: template.fiberMode,
+            fiberMode: template.fiberMode, availability: availability,
             customFields: try CustomFieldValidator.resolvedValues(values: customFields, against: template.customFieldSchemas)
         )
     }

@@ -106,10 +106,19 @@ public struct LocalQuarantineRecord: Codable, Hashable, Sendable, Identifiable {
         self.capturedAt = capturedAt
     }
 
-    /// The same rejected input in the same namespace, ignoring when it was captured.
-    func isSameRejection(as other: LocalQuarantineRecord) -> Bool {
-        namespace == other.namespace && resourceKey == other.resourceKey && recordType == other.recordType && payload == other.payload
-            && failure.category == other.failure.category && failure.message == other.failure.message
+    /// Hex SHA-256 of the rejected input, ignoring when it was captured and the record's own ID. Within a
+    /// namespace it keys the quarantine row, so de-duplication is a keyed lookup rather than a table decode.
+    func rejectionDigest() throws -> String {
+        struct Rejection: Encodable {
+            let resourceKey: ResourceKey?
+            let recordType: String?
+            let category: String
+            let message: String
+        }
+        var bytes = try PersistenceCoding.encode(
+            Rejection(resourceKey: resourceKey, recordType: recordType, category: String(describing: failure.category), message: failure.message))
+        bytes.append(payload)  // the JSON header is self-delimiting, so the concatenation is unambiguous
+        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
     }
 }
 

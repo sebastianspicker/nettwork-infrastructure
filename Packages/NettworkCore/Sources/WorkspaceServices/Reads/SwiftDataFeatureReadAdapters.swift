@@ -14,6 +14,37 @@ import WorkspaceChangeControl
 /// to surface their effect in a read model.
 public protocol ScopedMirrorRecordEnumerating: Sendable {
     func records(in namespace: PersistenceNamespace, recordTypes: Set<String>, limitPerType: Int) async throws -> [LocalMirrorRecord]
+    /// The newest visible, non-tombstone records, newest first by
+    /// `serverModifiedAt`. Never fails on volume; meant for append-only history.
+    func newestRecords(in namespace: PersistenceNamespace, recordTypes: Set<String>, limit: Int) async throws -> [LocalMirrorRecord]
+}
+
+extension ScopedMirrorRecordEnumerating {
+    public func newestRecords(in namespace: PersistenceNamespace, recordTypes: Set<String>, limit: Int) async throws -> [LocalMirrorRecord] {
+        let records = try await self.records(in: namespace, recordTypes: recordTypes, limitPerType: 100_000)
+        return Array(records.filter { !$0.isTombstone }.sorted { $0.serverModifiedAt > $1.serverModifiedAt }.prefix(limit))
+    }
+
+    /// D-6: audit reads cover only the newest events, newest first by
+    /// occurrence. Older events stay stored and in the audit export.
+    func newestAudits(in namespace: PersistenceNamespace, quarantining: Bool = false) async throws -> [AuditEvent] {
+        let records = try await newestRecords(
+            in: namespace, recordTypes: [CloudRecordNaming.auditRecordType, LocalRecordKind.auditEvent], limit: AuditReadLimits.newestEvents)
+        return try (quarantining ? MirrorRecordQuarantine(screening: records).accepted : records)
+            .decoded(AuditEvent.self, recordType: CloudRecordNaming.auditRecordType, expectedResourceKey: { .object($0.id) })
+            .sorted { $0.occurredAt > $1.occurredAt }
+    }
+}
+
+enum AuditReadLimits {
+    static let newestEvents = 5_000
+
+    static func recentSummary(for id: ObjectID, in audits: [AuditEvent]) -> [String] {
+        audits
+            .filter { $0.affectedObjectIDs.contains(id) || $0.affectedResourceKeys.contains(.object(id)) }
+            .prefix(10)
+            .map { "\($0.occurredAt.formatted()) · \($0.result.rawValue) · \($0.actorID)" }
+    }
 }
 
 public actor SwiftDataMirrorRecordEnumerator: ScopedMirrorRecordEnumerating {
@@ -27,6 +58,11 @@ public actor SwiftDataMirrorRecordEnumerator: ScopedMirrorRecordEnumerating {
         let result = try await persistence.mirroredRecords(in: namespace, recordTypes: recordTypes, limitPerType: boundedLimit)
         try Task.checkCancellation()
         return result
+    }
+
+    public func newestRecords(in namespace: PersistenceNamespace, recordTypes: Set<String>, limit: Int) async throws -> [LocalMirrorRecord] {
+        try Task.checkCancellation()
+        return try await persistence.newestMirroredRecords(in: namespace, recordTypes: recordTypes, limit: min(max(limit, 1), 100_000))
     }
 }
 
@@ -108,41 +144,6 @@ func lexicalLess(_ lhs: [String], _ rhs: [String]) -> Bool {
     return lhs.count < rhs.count
 }
 
-/// Session-local history is intentionally keyed by the complete account scope;
-/// it never leaks favorites or recently viewed IDs into another account or a
-/// renewed workspace session.
-public actor ScopedInventoryHistoryAdapter: InventoryHistoryStoring {
-    private let maximumRecents: Int
-    private var recentsByScope: [InventoryAccountScope: [ObjectID]] = [:]
-    private var favoritesByScope: [InventoryAccountScope: Set<ObjectID>] = [:]
-
-    public init(maximumRecents: Int = 50) {
-        self.maximumRecents = min(max(maximumRecents, 1), 50)
-    }
-
-    public func recent(in scope: InventoryAccountScope) async -> [ObjectID] {
-        Array(recentsByScope[scope, default: []].prefix(maximumRecents))
-    }
-
-    public func favorites(in scope: InventoryAccountScope) async -> Set<ObjectID> {
-        favoritesByScope[scope, default: []]
-    }
-
-    public func recordRecent(_ id: ObjectID, in scope: InventoryAccountScope) async {
-        var recents = recentsByScope[scope, default: []]
-        recents.removeAll { $0 == id }
-        recents.insert(id, at: 0)
-        recentsByScope[scope] = Array(recents.prefix(maximumRecents))
-    }
-
-    public func toggleFavorite(_ id: ObjectID, in scope: InventoryAccountScope) async -> Set<ObjectID> {
-        var favorites = favoritesByScope[scope, default: []]
-        if favorites.contains(id) { favorites.remove(id) } else { favorites.insert(id) }
-        favoritesByScope[scope] = favorites
-        return favorites
-    }
-}
-
 /// Read-only SwiftData/domain projections for browse, trace, scan, template,
 /// and IPAM features. Every entry point verifies the complete namespace before
 /// asking the lease-enforcing mirror reader for a bounded record set.
@@ -155,6 +156,7 @@ public actor SwiftDataFeatureReadAdapter: InventoryQuerying, TopologyBrowsing, T
     let currentAuthorizationContext: any CurrentAuthorizationContextProviding
     let operationBoundary: ProductionOperationBoundary
     let recordLimitPerType: Int
+    var projectionCache: CachedMirrorProjection?
 
     public init(
         account: AccountContext, persistence: SwiftDataPersistenceStore, reader: any ScopedMirrorRecordEnumerating,

@@ -282,14 +282,11 @@
             guard deletion.recordID.zoneID == zoneID else {
                 throw CloudKitSyncEngineBatchSourceError.unexpectedZone(deletion.recordID.zoneID.zoneName)
             }
-            guard let identity = try await identityIndex.identity(for: deletion.recordID.recordName, in: namespace) else {
-                throw CloudKitSyncEngineBatchSourceError.missingDeletionIdentity(deletion.recordID.recordName)
-            }
-            guard identity.recordName == deletion.recordID.recordName, identity.recordType == deletion.recordType,
-                identity.recordName == CloudRecordNaming.recordName(for: identity.resourceKey, workspaceID: namespace.workspaceID)
-            else {
-                throw CloudKitSyncEngineBatchSourceError.invalidRemoteIdentity
-            }
+            let stored = try await identityIndex.identity(for: deletion.recordID.recordName, in: namespace)
+            guard
+                let identity = try CloudKitSyncEngineBatchSourceError.validatedDeletionIdentity(
+                    stored, recordName: deletion.recordID.recordName, recordType: deletion.recordType, namespace: namespace)
+            else { return }
             try admit(byteCounts: [identity.systemFields.count])
             try append(
                 CloudRecordEnvelope(

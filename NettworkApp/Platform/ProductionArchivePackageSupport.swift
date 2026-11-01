@@ -7,24 +7,6 @@ enum ProductionCSVDirectoryPackageSource {
     static func source(at directoryURL: URL) throws -> ProductionCSVDirectoryImportSource {
         try ProductionCSVDirectoryImportSource(url: directoryURL)
     }
-
-    /// Compatibility path for callers that still need an in-memory document.
-    static func document(at directoryURL: URL) throws -> CSVImportDocument {
-        let source = try source(at: directoryURL)
-        defer { source.close() }
-        let files = try source.fileMetadata().map { metadata -> CSVImportDocument.File in
-            var reader = try source.openFile(metadata)
-            var bytes = Data()
-            while let chunk = try reader.nextChunk() {
-                guard chunk.count <= CSVImportLimits.maximumFileBytes - bytes.count else {
-                    throw CSVImportError.fileTooLarge
-                }
-                bytes.append(chunk)
-            }
-            return try CSVImportDocument.File(table: metadata.table, bytes: bytes)
-        }
-        return try CSVImportDocument(files: files)
-    }
 }
 
 final class SecurityScopedPackageAccess: @unchecked Sendable {

@@ -75,6 +75,7 @@ public actor FileBackedArchiveRestoreStore: ArchiveRestoreStore {
             generation: generation)
         let directory = root.appendingPathComponent(handle.id.description, isDirectory: true)
         if FileManager.default.fileExists(atPath: directory.path) {
+            try FileBackedStagingFiles.requireSidecar(sidecarURL(in: directory))
             let data = try FileBackedStagingFiles.readPrivate(
                 sidecarURL(in: directory),
                 maximumBytes: 1_048_576)
@@ -84,11 +85,10 @@ public actor FileBackedArchiveRestoreStore: ArchiveRestoreStore {
                 operationID: operationID)
         }
         nextGeneration &+= 1
-        try FileBackedStagingFiles.ensureNewPrivateDirectory(directory)
         let entry = Entry(
             handle: handle, source: source, operationID: operationID,
             directory: directory, rootSHA256: nil)
-        try writeSidecar(for: entry)
+        try FileBackedStagingFiles.createNewPrivateDirectory(directory) { try writeSidecar(for: entry) }
         entries[handle.id] = entry
         return handle
     }

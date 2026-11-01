@@ -56,94 +56,6 @@ public struct ReconciliationBuilder {
     }
 }
 
-public struct OutboxReplayPlan: Sendable {
-    public let ordered: [OutboxOperation]
-    public let deferredOperationIDs: Set<ObjectID>
-    public let cyclicOperationIDs: Set<ObjectID>
-    public init(ordered: [OutboxOperation], deferredOperationIDs: Set<ObjectID>, cyclicOperationIDs: Set<ObjectID>) {
-        self.ordered = ordered
-        self.deferredOperationIDs = deferredOperationIDs
-        self.cyclicOperationIDs = cyclicOperationIDs
-    }
-}
-
-/// Produces a deterministic topological order. Operations sharing an affected
-/// resource are serialized by creation time even when callers omitted an edge.
-public enum OutboxDependencyPlanner {
-    public static func plan(_ operations: [OutboxOperation], at date: Date) -> OutboxReplayPlan {
-        let eligible = eligibleOperations(in: operations, at: date)
-        let byID = Dictionary(uniqueKeysWithValues: eligible.map { ($0.operationID, $0) })
-        var dependencies = initialDependencies(for: eligible)
-        let accepted = acceptedOperationIDs(in: operations)
-        let deferred = deferredOperationIDs(eligible: eligible, byID: byID, dependencies: &dependencies, accepted: accepted)
-        let pending = topologicalOrder(eligible: eligible, byID: byID, dependencies: dependencies, deferred: deferred)
-        return OutboxReplayPlan(ordered: pending.ordered, deferredOperationIDs: deferred, cyclicOperationIDs: pending.cyclic)
-    }
-
-    private static func eligibleOperations(in operations: [OutboxOperation], at date: Date) -> [OutboxOperation] {
-        operations.filter { operation in
-            switch operation.state {
-            case .pending, .retryScheduled: return operation.nextRetryAt.map { $0 <= date } ?? true
-            case .uploading, .conflicted, .poisoned, .accepted: return false
-            }
-        }.sorted { lhs, rhs in
-            lhs.createdAt == rhs.createdAt ? lhs.operationID < rhs.operationID : lhs.createdAt < rhs.createdAt
-        }
-    }
-
-    private static func initialDependencies(for eligible: [OutboxOperation]) -> [ObjectID: Set<ObjectID>] {
-        var dependencies = Dictionary(uniqueKeysWithValues: eligible.map { ($0.operationID, Set($0.dependencyOperationIDs)) })
-        for index in eligible.indices {
-            for otherIndex in eligible.indices where otherIndex < index {
-                let later = eligible[index]
-                let earlier = eligible[otherIndex]
-                if !later.resourceKeys.isDisjoint(with: earlier.resourceKeys) {
-                    dependencies[later.operationID, default: []].insert(earlier.operationID)
-                }
-            }
-        }
-        return dependencies
-    }
-
-    private static func acceptedOperationIDs(in operations: [OutboxOperation]) -> Set<ObjectID> {
-        Set(operations.filter { $0.state == .accepted && $0.receipt != nil }.map(\.operationID))
-    }
-
-    private static func deferredOperationIDs(
-        eligible: [OutboxOperation], byID: [ObjectID: OutboxOperation], dependencies: inout [ObjectID: Set<ObjectID>], accepted: Set<ObjectID>
-    ) -> Set<ObjectID> {
-        var deferred = Set<ObjectID>()
-        for operation in eligible where !operation.dependencyOperationIDs.allSatisfy({ byID[$0] != nil || accepted.contains($0) }) {
-            deferred.insert(operation.operationID)
-        }
-        var addedDeferred = true
-        while addedDeferred {
-            addedDeferred = false
-            for operation in eligible where !deferred.contains(operation.operationID) {
-                if !dependencies[operation.operationID, default: []].isDisjoint(with: deferred) {
-                    deferred.insert(operation.operationID)
-                    addedDeferred = true
-                }
-            }
-        }
-        return deferred
-    }
-
-    private static func topologicalOrder(
-        eligible: [OutboxOperation], byID: [ObjectID: OutboxOperation], dependencies: [ObjectID: Set<ObjectID>], deferred: Set<ObjectID>
-    ) -> (ordered: [OutboxOperation], cyclic: Set<ObjectID>) {
-        var pending = Set(eligible.map(\.operationID)).subtracting(deferred)
-        var ordered: [OutboxOperation] = []
-        while let nextID = pending.filter({ dependencies[$0, default: []].isDisjoint(with: pending) }).sorted(by: stableOrder).first {
-            pending.remove(nextID)
-            if let operation = byID[nextID] { ordered.append(operation) }
-        }
-        return (ordered, pending)
-    }
-
-    private static func stableOrder(_ lhs: ObjectID, _ rhs: ObjectID) -> Bool { lhs < rhs }
-}
-
 public enum RetrySchedule {
     public static func nextRetry(after attemptCount: Int, retryAfter: Date?, now: Date = .now) -> Date? {
         if let retryAfter { return retryAfter }
@@ -166,6 +78,8 @@ public actor CloudOutboxReplayer {
     private let receiptLookup: (any CloudReceiptLookupTransport)?
     private let outbox: any MutationOutbox
     private let conflicts: any ConflictResolver
+    /// Per-operation count, so an overlapping replay pass cannot clear an ID another pass still owns.
+    private var inFlight: [ObjectID: Int] = [:]
 
     public init(
         transport: any CloudRecordTransport, receiptLookup: (any CloudReceiptLookupTransport)? = nil, outbox: any MutationOutbox,
@@ -184,16 +98,41 @@ public actor CloudOutboxReplayer {
         var failures: [SyncFailure] = []
         var uploaded: [ObjectID] = []
         do {
-            let operations = try await outbox.operations(in: namespace)
-            let plan = OutboxDependencyPlanner.plan(operations, at: now)
+            let recovered = await recoverInterrupted(try await outbox.unacceptedOperations(in: namespace).operations, namespace: namespace, now: now)
+            failures.append(contentsOf: recovered.failures)
+            uploaded.append(contentsOf: recovered.uploadedOperationIDs)
+            let outstanding = try await outbox.unacceptedOperations(in: namespace)
+            let plan = OutboxDependencyPlanner.plan(outstanding.operations, acceptedIDs: outstanding.acceptedIDs, at: now)
             failures.append(contentsOf: await poisonCycles(plan.cyclicOperationIDs, namespace: namespace, now: now))
+            var unaccepted = Set<ObjectID>()
             for operation in plan.ordered {
+                // A dependency that failed, conflicted or was poisoned earlier in this pass was not accepted, so this operation waits.
+                guard plan.dependencies[operation.operationID, default: []].isDisjoint(with: unaccepted) else {
+                    unaccepted.insert(operation.operationID)
+                    continue
+                }
                 let result = await replay(operation, namespace: namespace, account: account, actor: actor, stateProvider: stateProvider, now: now)
                 failures.append(contentsOf: result.failures)
                 uploaded.append(contentsOf: result.uploadedOperationIDs)
+                if !result.uploadedOperationIDs.contains(operation.operationID) { unaccepted.insert(operation.operationID) }
             }
         } catch {
             failures.append(CloudFailureClassifier.classify(error))
+        }
+        return CloudReplayResult(uploadedOperationIDs: uploaded, failures: failures)
+    }
+
+    /// `.uploading` rows this actor is not sending belong to a process that died mid-send; the write may have committed.
+    private func recoverInterrupted(_ operations: [OutboxOperation], namespace: PersistenceNamespace, now: Date) async -> CloudReplayResult {
+        var failures: [SyncFailure] = []
+        var uploaded: [ObjectID] = []
+        for operation in operations where operation.state == .uploading && inFlight[operation.operationID] == nil {
+            let fallback = SyncFailure(category: .network, message: "Upload was interrupted.", resourceKeys: operation.resourceKeys)
+            do {
+                if try await recoverLostResponse(operation: operation, namespace: namespace, now: now, fallback: fallback, failures: &failures) {
+                    uploaded.append(operation.operationID)
+                }
+            } catch { failures.append(CloudFailureClassifier.classify(error)) }
         }
         return CloudReplayResult(uploadedOperationIDs: uploaded, failures: failures)
     }
@@ -215,6 +154,11 @@ public actor CloudOutboxReplayer {
         _ operation: OutboxOperation, namespace: PersistenceNamespace, account: AccountContext, actor: ActorContext,
         stateProvider: any AuthoritativeMutationStateProviding, now: Date
     ) async -> CloudReplayResult {
+        inFlight[operation.operationID, default: 0] += 1
+        defer {
+            let remaining = inFlight[operation.operationID, default: 1] - 1
+            inFlight[operation.operationID] = remaining > 0 ? remaining : nil
+        }
         do {
             try await outbox.recordAttempt(operationID: operation.operationID, at: now, namespace: namespace)
             try OfflineExecutionEligibility.validate(operation, account: account, actor: actor)

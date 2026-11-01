@@ -59,7 +59,9 @@ public struct FileBackedArchiveEntrySource: ArchiveEntrySource {
 
     private func relativePath(for url: URL) throws -> String {
         let rootPath = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        let canonicalPath = url.resolvingSymlinksInPath().standardizedFileURL.path
+        // Resolve only the parent: a symlink leaf must be classified as a symlink, not followed.
+        let canonicalPath = url.deletingLastPathComponent().resolvingSymlinksInPath()
+            .appendingPathComponent(url.lastPathComponent).standardizedFileURL.path
         guard canonicalPath.hasPrefix(rootPath) else { throw FileBackedStagingError.invalidArchiveEntry }
         return try ArchivePathPolicy.normalized(String(canonicalPath.dropFirst(rootPath.count)))
     }

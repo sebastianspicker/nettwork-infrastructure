@@ -15,6 +15,8 @@ import WorkspaceChangeControl
 /// references them, so a crash leaves at most unreferenced assets (never
 /// collected). Loading is lazy and fails closed: an unknown version, undecodable
 /// file, oversized snapshot or missing asset throws and is never treated as empty.
+// shortcut: every commit rewrites the whole snapshot and tombstones are kept, capped at
+// 64 MiB (then commits fail as quota exceeded); move to an append log before stage-1 data nears that size.
 public actor LocalWorkspaceRecordStore {
     private struct State {
         var incarnation: UUID

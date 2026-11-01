@@ -26,7 +26,8 @@ CloudKit setup, access rules, storage, and retention policy.
 | `NETTWORK_PRODUCTION_CONFIGURATION_PROVIDER` | Empty | Name a provider class compiled into the app target |
 
 Both targets request CloudKit and push entitlements. The macOS target also uses
-the App Sandbox and outgoing network-client entitlement. The iOS Info.plist
+the App Sandbox with the outgoing network-client, user-selected file
+read/write and printing entitlements. The iOS Info.plist
 declares camera use for scanning asset labels and the `nettwork` URL scheme.
 
 Keep local overrides and credentials outside version control. The repository

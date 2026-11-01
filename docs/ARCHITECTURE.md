@@ -169,6 +169,12 @@ uses one mirror projection and materializes inventory rows once, without
 loading detail attachments, audit summaries, or traces. History publication is
 bound to both session identity and the current history generation.
 
+Read adapters reuse their last projection while a persisted mirror fingerprint
+(row count, maintenance and visibility stamps, conflicts, and sync state) is
+unchanged, so other stores on the same container also invalidate it. Audit
+history is not part of the projection: object details, audit search, and
+operations reports read the newest 5,000 audit events with a bounded query.
+
 A successful topology snapshot carries an immutable index from parent IDs to
 localized, sorted children. Recursive rows use this index for traversal and
 expansion affordances. Physical inventory summaries use an iterative traversal
@@ -237,6 +243,12 @@ capabilities instead of aggregate inline asset bytes. Preflight verification
 uses `.verification` beneath the configured archive restore staging root,
 separate from operation directories. The in-memory archive interfaces remain
 available, including legacy activation authorities.
+
+At launch, the runtime removes staging that an earlier app kill left behind:
+only items under the attachment staging, archive verification, and audit export
+roots that carry the app's `.nettwork-staging` marker and are older than the
+staging lifetime. Restore operation directories and CSV staging keep their
+durable sidecars and are never swept.
 
 Archive checksums establish integrity against accidental change; they do not
 prove authenticity against a malicious archive writer.

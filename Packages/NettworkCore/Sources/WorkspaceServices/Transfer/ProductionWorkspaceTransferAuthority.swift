@@ -34,6 +34,14 @@ public struct ProductionArchiveAsset: Sendable {
 
 public protocol ProductionArchiveAssetSource: Sendable {
     func assets(in namespace: PersistenceNamespace) async throws -> [ProductionArchiveAsset]
+    /// Same as `assets(in:)`, for callers that already decoded the visible mirror.
+    func assets(in namespace: PersistenceNamespace, records: [LocalMirrorRecord]) async throws -> [ProductionArchiveAsset]
+}
+
+extension ProductionArchiveAssetSource {
+    public func assets(in namespace: PersistenceNamespace, records: [LocalMirrorRecord]) async throws -> [ProductionArchiveAsset] {
+        try await assets(in: namespace)
+    }
 }
 
 /// The final authority mutation changes only the workspace sentinel. Every

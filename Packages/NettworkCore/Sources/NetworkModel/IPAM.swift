@@ -87,6 +87,16 @@ public enum IPAddress: Codable, Hashable, Sendable, Comparable, CustomStringConv
         }
     }
 
+    /// The lowest `count` (at most 64) address bits as an exact integer.
+    func lowBits(_ count: Int) -> UInt64 {
+        let raw: UInt64
+        switch self {
+        case .v4(let value): raw = UInt64(value)
+        case .v6(let words): raw = words.suffix(4).reduce(0) { $0 << 16 | UInt64($1) }
+        }
+        return count >= 64 ? raw : raw & ((1 << UInt64(count)) - 1)
+    }
+
     private static func parseV4(_ input: String) -> UInt32? {
         let octets = input.split(separator: ".", omittingEmptySubsequences: false)
         guard octets.count == 4 else { return nil }
@@ -109,12 +119,15 @@ public enum IPAddress: Codable, Hashable, Sendable, Comparable, CustomStringConv
         guard let left = v6Tokens(halves[0]),
             let right = halves.count == 2 ? v6Tokens(halves[1]) : []
         else { return nil }
-        guard let parsed = parseV6Groups(left + right, leftTokenCount: left.count) else { return nil }
+        guard let parsed = parseV6Groups(left + right, leftTokenCount: left.count, allowsDottedLast: Self.endsWithGroup(halves)) else { return nil }
         if halves.count == 1 { return parsed.words.count == 8 ? parsed.words : nil }
         let zeroCount = 8 - parsed.words.count
         guard zeroCount >= 1 else { return nil }
         return Array(parsed.words.prefix(parsed.leftWordCount)) + Array(repeating: 0, count: zeroCount) + Array(parsed.words.dropFirst(parsed.leftWordCount))
     }
+
+    /// A dotted quad is only valid as the final group of the whole address, so nothing may follow it, not even `::`.
+    private static func endsWithGroup(_ halves: [String]) -> Bool { halves.last?.isEmpty == false }
 
     private static func v6Tokens(_ value: String) -> [Substring]? {
         guard !value.isEmpty else { return [] }
@@ -122,11 +135,11 @@ public enum IPAddress: Codable, Hashable, Sendable, Comparable, CustomStringConv
         return result.contains(where: \.isEmpty) ? nil : result
     }
 
-    private static func parseV6Groups(_ groups: [Substring], leftTokenCount: Int) -> (words: [UInt16], leftWordCount: Int)? {
+    private static func parseV6Groups(_ groups: [Substring], leftTokenCount: Int, allowsDottedLast: Bool) -> (words: [UInt16], leftWordCount: Int)? {
         var words = [UInt16]()
         var leftWordCount = 0
         for (index, group) in groups.enumerated() {
-            guard let parsed = parseV6Group(group, isLast: index == groups.count - 1) else { return nil }
+            guard let parsed = parseV6Group(group, isLast: allowsDottedLast && index == groups.count - 1) else { return nil }
             words.append(contentsOf: parsed)
             if index < leftTokenCount { leftWordCount += parsed.count }
         }

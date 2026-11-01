@@ -57,9 +57,7 @@ public struct IPAMPrefixSnapshot: Identifiable, Equatable, Sendable {
         self.isConflicted = isConflicted
     }
 
-    public var hasReservedRanges: Bool {
-        !reservedSummary.localizedCaseInsensitiveContains("0 reserved range")
-    }
+    public var hasReservedRanges: Bool { !value.reservedRanges.isEmpty }
 }
 
 public struct IPAMAddressSnapshot: Identifiable, Equatable, Sendable {

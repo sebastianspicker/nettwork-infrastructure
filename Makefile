@@ -40,6 +40,8 @@ check-config:
 	ruby -e 'require "yaml"; spec = YAML.load_file("project.yml"); abort "missing Nettwork targets" unless spec.dig("targets", "Nettwork") && spec.dig("targets", "NettworkMac")'
 	plutil -lint NettworkApp/Resources/Info.plist Config/Nettwork-iOS.entitlements \
 		Config/Nettwork-macOS.entitlements
+	plutil -extract 'com\.apple\.security\.files\.user-selected\.read-write' raw Config/Nettwork-macOS.entitlements >/dev/null
+	plutil -extract 'com\.apple\.security\.print' raw Config/Nettwork-macOS.entitlements >/dev/null
 
 check-syntax:
 	@command -v rg >/dev/null || { \

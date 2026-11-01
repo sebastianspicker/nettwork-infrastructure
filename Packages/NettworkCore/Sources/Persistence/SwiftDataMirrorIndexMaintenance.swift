@@ -1,5 +1,6 @@
 import Foundation
 import NetworkModel
+import SwiftData
 import WorkspaceChangeControl
 
 struct MirrorIndexMaintenanceDelta {
@@ -152,6 +153,18 @@ extension SwiftDataPersistenceStore {
         usage.updatedAt = .now
     }
 
+    /// Exact member-row count of one transfer, without materializing the rows.
+    public func mirrorTransferMemberCount(transferID: ObjectID, in namespace: PersistenceNamespace) throws -> Int {
+        try validateActiveLease(for: namespace)
+        return try mirrorTransferMemberCount(namespaceKey: PersistenceNamespaceKey.value(for: namespace), transferID: transferID)
+    }
+
+    private func mirrorTransferMemberCount(namespaceKey: String, transferID: ObjectID) throws -> Int {
+        let transfer = transferID.description
+        return try modelContext.fetchCount(
+            FetchDescriptor<LocalMirrorTransferMemberModel>(predicate: #Predicate { $0.namespaceKey == namespaceKey && $0.transferID == transfer }))
+    }
+
     func updateMirrorTransferUsage(_ transferIDs: Set<ObjectID>, namespace: PersistenceNamespace) throws {
         let namespaceKey = PersistenceNamespaceKey.value(for: namespace)
         for transferID in transferIDs {
@@ -163,10 +176,9 @@ extension SwiftDataPersistenceStore {
         _ transferID: ObjectID, namespace: PersistenceNamespace,
         namespaceKey: String
     ) throws {
-        let members = try mirrorTransferMemberModels(
-            namespaceKey: namespaceKey, transferID: transferID, fetchLimit: LocalMirrorMaintenanceLimits.maximumTransferMembers + 1)
-        guard members.count <= LocalMirrorMaintenanceLimits.maximumTransferMembers else {
-            throw PersistenceStoreError.mirrorMaintenanceCapacityExceeded(LocalMirrorMaintenanceLimits.maximumTransferMembers)
+        guard try mirrorTransferMemberCount(namespaceKey: namespaceKey, transferID: transferID) <= LocalMirrorMaintenanceLimits.maximumTransferMembersTotal
+        else {
+            throw PersistenceStoreError.mirrorMaintenanceCapacityExceeded(LocalMirrorMaintenanceLimits.maximumTransferMembersTotal)
         }
         let owners = try mirrorAssetOwnerModels(namespaceKey: namespaceKey, transferID: transferID)
         let bytes = try owners.reduce(0, Self.addingAssetBytes)

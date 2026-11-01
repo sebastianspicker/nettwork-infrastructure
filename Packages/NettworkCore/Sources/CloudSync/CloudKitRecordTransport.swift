@@ -52,6 +52,11 @@
                 }
                 return .accepted(receipt: try CloudDeterministicCoding.decode(OperationReceipt.self, from: receipt.payload))
             } catch {
+                let error = Self.primaryError(error)
+                if Self.isIndeterminateNetworkError(error) {
+                    let resourceKeys = Set(mutation.records.map(\.resourceKey))
+                    throw CloudTransportFailure(Self.failure(for: error, resourceKeys: resourceKeys), possiblyCommitted: true)
+                }
                 return saveResult(for: error, mutation: mutation)
             }
         }
@@ -69,7 +74,7 @@
         }
 
         private func saveResult(for error: any Error, mutation: AtomicCloudMutation) -> CloudSaveResult {
-            if let cloudError = error as? CKError, cloudError.code == .serverRecordChanged {
+            if let cloudError = error as? CKError, Self.isServerRecordChanged(cloudError) {
                 return .conflict(reconciliationCase(for: mutation, cloudError: cloudError))
             }
             let resourceKeys = Set(mutation.records.map(\.resourceKey))
@@ -81,7 +86,7 @@
                         resourceKeys: resourceKeys
                     ))
             }
-            return saveResult(for: failure(for: error, resourceKeys: resourceKeys))
+            return saveResult(for: Self.failure(for: error, resourceKeys: resourceKeys))
         }
 
         private func saveResult(for failure: SyncFailure) -> CloudSaveResult {

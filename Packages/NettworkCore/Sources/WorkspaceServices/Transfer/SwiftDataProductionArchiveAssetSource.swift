@@ -23,11 +23,23 @@ public struct SwiftDataProductionArchiveAssetSource: ProductionArchiveAssetSourc
     }
 
     public func assets(in namespace: PersistenceNamespace) async throws -> [ProductionArchiveAsset] {
-        let records = try await persistence.mirroredRecords(in: namespace)
+        try await assets(in: namespace, records: persistence.mirroredRecords(in: namespace))
+    }
+
+    public func assets(in namespace: PersistenceNamespace, records: [LocalMirrorRecord]) async throws -> [ProductionArchiveAsset] {
+        let records =
+            records
             .filter {
                 !$0.isTombstone
             }
             .sorted { $0.resourceKey < $1.resourceKey }
+        // Fail before reading any file when the declared sizes cannot fit the archive's expanded-size limit.
+        var declaredBytes = 0
+        for byteCount in records.compactMap(\.recordAssetMetadata?.byteCount) {
+            let (sum, overflow) = declaredBytes.addingReportingOverflow(byteCount)
+            guard !overflow, sum <= ArchiveSafetyLimits.maximumExpandedBytes else { throw ArchiveValidationError.archiveTooLarge }
+            declaredBytes = sum
+        }
         var identities = Set<ObjectID>()
         var result: [ProductionArchiveAsset] = []
         result.reserveCapacity(records.count)
@@ -69,7 +81,7 @@ public struct SwiftDataProductionArchiveAssetSource: ProductionArchiveAssetSourc
             throw ProductionArchiveAssetSourceError.malformedAssetRecord(record.resourceKey)
         }
         try insertIdentity(asset.assetID, into: &identities)
-        let bytes = try await verifiedBytes(for: asset.metadata, namespace: namespace)
+        let bytes = try await verifiedBytes(for: asset.metadata, record: record, namespace: namespace)
         return ProductionArchiveAsset(
             assetID: asset.assetID, stableID: ArchiveAsset.stableID(for: asset.relativePath),
             relativePath: asset.relativePath, contentType: asset.metadata.contentType, bytes: bytes, owner: .workspaceAsset)
@@ -91,7 +103,7 @@ public struct SwiftDataProductionArchiveAssetSource: ProductionArchiveAssetSourc
             workOrderID: binding.workOrderID, attachmentID: binding.attachmentID,
             reservationID: binding.reservationID, provenance: binding.provenance, evidence: binding.evidence, assetMetadata: binding.assetMetadata,
             intentDigest: binding.intentDigest, operationID: binding.operationID, auditEventID: binding.auditEventID, boundAt: binding.boundAt)
-        let bytes = try await verifiedBytes(for: binding.assetMetadata, namespace: namespace)
+        let bytes = try await verifiedBytes(for: binding.assetMetadata, record: record, namespace: namespace)
         guard AttachmentEvidenceBindingRecord.evidenceDigest(for: bytes) == binding.provenance.domainSeparatedSHA256 else {
             throw ProductionArchiveAssetSourceError.corruptAsset(binding.attachmentID)
         }
@@ -113,7 +125,7 @@ public struct SwiftDataProductionArchiveAssetSource: ProductionArchiveAssetSourc
             throw ProductionArchiveAssetSourceError.malformedAssetRecord(record.resourceKey)
         }
         try insertIdentity(binding.assetMetadata.id, into: &identities)
-        let bytes = try await verifiedBytes(for: binding.assetMetadata, namespace: namespace)
+        let bytes = try await verifiedBytes(for: binding.assetMetadata, record: record, namespace: namespace)
         let path = ArchiveLayout.assetsDirectory + "/floor-plans/" + binding.floorID.description + ".jpg"
         return ProductionArchiveAsset(
             assetID: binding.assetMetadata.id, stableID: ArchiveAsset.stableID(for: path), relativePath: path,
@@ -124,8 +136,10 @@ public struct SwiftDataProductionArchiveAssetSource: ProductionArchiveAssetSourc
         guard identities.insert(id).inserted else { throw ProductionArchiveAssetSourceError.duplicateAsset(id) }
     }
 
-    private func verifiedBytes(for metadata: CloudRecordAssetMetadata, namespace: PersistenceNamespace) async throws -> Data {
-        let bytes = try await persistence.data(for: metadata.id, namespace: namespace)
+    private func verifiedBytes(
+        for metadata: CloudRecordAssetMetadata, record: LocalMirrorRecord, namespace: PersistenceNamespace
+    ) async throws -> Data {
+        let bytes = try await persistence.data(for: metadata.id, referencedBy: record, namespace: namespace)
         guard bytes.count == metadata.byteCount,
             CloudRecordAssetDescriptor.sha256(for: bytes) == metadata.sha256
         else {

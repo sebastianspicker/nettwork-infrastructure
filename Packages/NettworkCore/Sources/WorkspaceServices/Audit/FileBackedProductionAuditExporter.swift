@@ -1,4 +1,5 @@
 import CloudSync
+import ContentSafety
 import CryptoKit
 import Foundation
 import ImportExport
@@ -67,6 +68,8 @@ public actor FileBackedProductionAuditExporter: ProductionImmutableAuditExportin
         let capability: ProductionStagedAuditExport
         let operationID: ObjectID
         let namespace: PersistenceNamespace
+        /// The marked per-export directory (`root/<uuid>/`) that holds `privateURL`.
+        let unitURL: URL
         let privateURL: URL
         let destinationURL: URL
     }
@@ -88,7 +91,11 @@ public actor FileBackedProductionAuditExporter: ProductionImmutableAuditExportin
         try requireNamespace(namespace)
         try preparePrivateRoot()
         let destinationURL = try await destination.destination(for: operationID, namespace: namespace).standardizedFileURL
-        let records = try await persistence.mirroredRecords(in: namespace)
+        // Complete or throwing: a full audit export is never truncated, so an
+        // over-limit mirror surfaces `invalidReadLimit` instead of dropping events.
+        // shortcut: one read capped at 100,000 events per type; page by serverModifiedAt before a workspace nears that.
+        let records = try await persistence.mirroredRecords(
+            in: namespace, recordTypes: [CloudRecordNaming.auditRecordType, LocalRecordKind.auditEvent], limitPerType: 100_000)
         let events =
             try records
             .filter {
@@ -115,19 +122,12 @@ public actor FileBackedProductionAuditExporter: ProductionImmutableAuditExportin
         )
         let bytes = try CloudDeterministicCoding.encode(document)
         let capability = ProductionStagedAuditExport(capabilityID: ObjectID())
-        let url = root.appendingPathComponent(capability.capabilityID.description, isDirectory: false)
-        guard !FileManager.default.fileExists(atPath: url.path) else {
-            throw ProductionAuditExportError.invalidStagingRoot
-        }
-        try bytes.write(to: url, options: [.atomic, .completeFileProtection])
-        try FileManager.default.setAttributes(
-            [.posixPermissions: NSNumber(value: 0o600)],
-            ofItemAtPath: url.path
-        )
+        let (unit, url) = try stage(bytes, as: capability)
         entries[capability.capabilityID] = Entry(
             capability: capability,
             operationID: operationID,
             namespace: namespace,
+            unitURL: unit,
             privateURL: url,
             destinationURL: destinationURL
         )
@@ -167,7 +167,7 @@ public actor FileBackedProductionAuditExporter: ProductionImmutableAuditExportin
             )
             try FileManager.default.moveItem(at: temporaryURL, to: finalURL)
             entries.removeValue(forKey: staged.capabilityID)
-            try? FileManager.default.removeItem(at: entry.privateURL)
+            try? FileManager.default.removeItem(at: entry.unitURL)
             return finalURL
         } catch {
             try? FileManager.default.removeItem(at: temporaryURL)
@@ -178,7 +178,30 @@ public actor FileBackedProductionAuditExporter: ProductionImmutableAuditExportin
     public func abortAudit(_ staged: ProductionStagedAuditExport, in namespace: PersistenceNamespace) async {
         guard let entry = entries[staged.capabilityID], entry.namespace == namespace else { return }
         entries.removeValue(forKey: staged.capabilityID)
-        try? FileManager.default.removeItem(at: entry.privateURL)
+        try? FileManager.default.removeItem(at: entry.unitURL)
+    }
+
+    /// Each export stages in its own marked directory so a launch sweep can
+    /// remove what an app kill left behind (see `StagingSweep`).
+    private func stage(_ bytes: Data, as capability: ProductionStagedAuditExport) throws -> (unit: URL, file: URL) {
+        let unit = root.appendingPathComponent(capability.capabilityID.description, isDirectory: true)
+        let url = unit.appendingPathComponent("audit.json", isDirectory: false)
+        guard !FileManager.default.fileExists(atPath: unit.path) else {
+            throw ProductionAuditExportError.invalidStagingRoot
+        }
+        do {
+            try FileManager.default.createDirectory(at: unit, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            try StagingSweep.markDirectory(unit)
+            try bytes.write(to: url, options: [.atomic, .completeFileProtection])
+            try FileManager.default.setAttributes(
+                [.posixPermissions: NSNumber(value: 0o600)],
+                ofItemAtPath: url.path
+            )
+        } catch {
+            try? FileManager.default.removeItem(at: unit)
+            throw error
+        }
+        return (unit, url)
     }
 
     private func requireNamespace(_ namespace: PersistenceNamespace) throws {

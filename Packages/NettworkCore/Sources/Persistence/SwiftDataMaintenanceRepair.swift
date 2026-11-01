@@ -231,8 +231,8 @@ extension SwiftDataPersistenceStore {
         namespace: PersistenceNamespace
     ) throws {
         for (transferID, members) in summary.membersByTransfer {
-            guard members.count <= LocalMirrorMaintenanceLimits.maximumTransferMembers else {
-                throw PersistenceStoreError.mirrorMaintenanceCapacityExceeded(LocalMirrorMaintenanceLimits.maximumTransferMembers)
+            guard members.count <= LocalMirrorMaintenanceLimits.maximumTransferMembersTotal else {
+                throw PersistenceStoreError.mirrorMaintenanceCapacityExceeded(LocalMirrorMaintenanceLimits.maximumTransferMembersTotal)
             }
             try insertTransferMembers(members, namespace: namespace)
             let owners = summary.ownersByTransfer[transferID] ?? []
@@ -309,9 +309,9 @@ extension SwiftDataPersistenceStore {
         try validateActiveLease(for: namespace)
         let models = try mirrorTransferMemberModels(
             namespaceKey: PersistenceNamespaceKey.value(for: namespace), transferID: transferID,
-            fetchLimit: LocalMirrorMaintenanceLimits.maximumTransferMembers + 1)
-        guard models.count <= LocalMirrorMaintenanceLimits.maximumTransferMembers else {
-            throw PersistenceStoreError.mirrorMaintenanceCapacityExceeded(LocalMirrorMaintenanceLimits.maximumTransferMembers)
+            fetchLimit: LocalMirrorMaintenanceLimits.maximumTransferMembersTotal + 1)
+        guard models.count <= LocalMirrorMaintenanceLimits.maximumTransferMembersTotal else {
+            throw PersistenceStoreError.mirrorMaintenanceCapacityExceeded(LocalMirrorMaintenanceLimits.maximumTransferMembersTotal)
         }
         return try models.map { model in
             LocalMirrorTransferMember(

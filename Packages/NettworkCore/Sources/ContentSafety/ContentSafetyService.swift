@@ -61,16 +61,12 @@ public struct ContentSafetyService: Sendable {
         source: some OpaqueContentSource, purpose: ContentPurpose,
         selectedPDFPage: Int? = nil, authorization: AuthorizedOperationContext
     ) async throws -> SanitizedContentDescriptor {
-        var state = ContentSafetyProcessingState.initialized
         try await validateAuthorization(authorization)
-        state = try ContentSafetyStateMachine.transition(from: state, to: .authorized)
 
         let validatedSource = try readAndInspect(source, purpose: purpose)
-        state = try ContentSafetyStateMachine.transition(from: state, to: .sourced)
         try validate(
             type: validatedSource.signatureType, metadata: validatedSource.metadata,
             purpose: purpose)
-        state = try ContentSafetyStateMachine.transition(from: state, to: .validated)
 
         let outputLimits = limits(for: purpose)
         let result = try decoder.decodeAndSanitize(
@@ -80,13 +76,9 @@ public struct ContentSafetyService: Sendable {
         try validate(
             decoded: result.decoded, signatureType: validatedSource.signatureType, purpose: purpose,
             selectedPDFPage: selectedPDFPage)
-        state = try ContentSafetyStateMachine.transition(from: state, to: .decoded)
         try validate(raster: result.raster, limits: outputLimits)
-        state = try ContentSafetyStateMachine.transition(from: state, to: .sanitized)
 
         let descriptor = try await stage(result.raster, purpose: purpose, authorization: authorization)
-        state = try ContentSafetyStateMachine.transition(from: state, to: .staged)
-        _ = state
         return descriptor
     }
 
@@ -145,7 +137,6 @@ public struct ContentSafetyService: Sendable {
         guard descriptor.namespace == AttachmentNamespace(account: authorization.account) else {
             throw ContentSafetyError.unauthorized
         }
-        _ = try ContentSafetyStateMachine.transition(from: .staged, to: .cleanedUp)
         try await staging.remove(descriptor.stagingToken, namespace: descriptor.namespace)
     }
 

@@ -147,7 +147,8 @@ extension TransferScreen {
             Task {
                 do {
                     let document = try await model.prepareArchiveExportHandoff()
-                    try NettworkArchiveDocument.publish(document, to: url)
+                    // The write can be up to the archive size limit; keep it off the main actor.
+                    try await Task.detached { try NettworkArchiveDocument.publish(document, to: url) }.value
                     archiveSaveMessage = "Archive saved to the selected location."
                 } catch {
                     NettworkArchiveDocument.discardUnpublishedPlaceholder(at: url)

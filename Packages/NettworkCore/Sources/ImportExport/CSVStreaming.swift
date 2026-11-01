@@ -79,7 +79,7 @@ public enum RFC4180Parser {
         private var hasProcessedPreamble = false
         private var state: State = .field
         private var field = Data()
-        private var row: [Data] = []
+        private var row: [String] = []
         private var pendingCR = false
         private var pendingQuotedCR = false
         private var inputBytes = 0
@@ -201,17 +201,13 @@ public enum RFC4180Parser {
 
         private mutating func endField() throws {
             guard row.count < CSVImportLimits.maximumColumns else { throw CSVImportError.tooManyColumns }
-            guard String(data: field, encoding: .utf8) != nil else { throw CSVImportError.malformedUTF8 }
-            row.append(field)
+            guard let value = String(data: field, encoding: .utf8) else { throw CSVImportError.malformedUTF8 }
+            row.append(value)
             field.removeAll(keepingCapacity: true)
         }
 
         private mutating func emitRow(_ body: ([String]) throws -> Void) throws {
-            let decoded = try row.map { bytes -> String in
-                guard let value = String(data: bytes, encoding: .utf8) else { throw CSVImportError.malformedUTF8 }
-                return value
-            }
-            try body(decoded)
+            try body(row)
             row.removeAll(keepingCapacity: true)
             rowBytes = 0
         }

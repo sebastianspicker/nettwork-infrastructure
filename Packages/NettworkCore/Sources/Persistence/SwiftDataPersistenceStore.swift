@@ -160,9 +160,7 @@ actor NamespacedAttachmentFiles {
 
 /// The actor owns one SwiftData context. Every query and mutation enters this
 /// isolation boundary, so model instances never escape into features or sync.
-public actor SwiftDataPersistenceStore: TopologyRepository, IPAMRepository, WorkOrderRepository, AuditRepository, AttachmentStore, MutationOutbox,
-    ConflictResolver
-{
+public actor SwiftDataPersistenceStore: MutationOutbox, ConflictResolver {
     let modelContext: ModelContext
     let attachmentFiles: NamespacedAttachmentFiles
     var activeLeaseIDs = [String: UUID]()

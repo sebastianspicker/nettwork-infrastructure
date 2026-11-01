@@ -30,18 +30,24 @@ public struct CloudRemoteMirrorSnapshot: Hashable, Sendable {
     /// activation marker arrives.
     public let recordEnvelopesByResourceKey: [ResourceKey: CloudRecordEnvelope]
     public let hasCompleteReferenceIndex: Bool
+    /// Active transfers whose member digest the mirror already verified (the
+    /// persisted visibility is `.active` for the stored sentinel's commit) and
+    /// that the candidate cannot change. Their members are not reloaded; any
+    /// member the closure fetched counts as live.
+    public let preverifiedActiveTransferIDs: Set<ObjectID>
 
     public init(
         existingResourceKeys: Set<ResourceKey>, tombstonedResourceKeys: Set<ResourceKey>,
         referencesByResourceKey: [ResourceKey: Set<ResourceKey>] = [:],
         recordEnvelopesByResourceKey: [ResourceKey: CloudRecordEnvelope] = [:],
-        hasCompleteReferenceIndex: Bool = false
+        hasCompleteReferenceIndex: Bool = false, preverifiedActiveTransferIDs: Set<ObjectID> = []
     ) {
         self.existingResourceKeys = existingResourceKeys
         self.tombstonedResourceKeys = tombstonedResourceKeys
         self.referencesByResourceKey = referencesByResourceKey
         self.recordEnvelopesByResourceKey = recordEnvelopesByResourceKey
         self.hasCompleteReferenceIndex = hasCompleteReferenceIndex
+        self.preverifiedActiveTransferIDs = preverifiedActiveTransferIDs
     }
 }
 

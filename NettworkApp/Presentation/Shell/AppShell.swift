@@ -60,8 +60,10 @@ private struct CompactAppShell: View {
                 .tag(tab)
             }
         }
-        .onChange(of: router.deepLinkRequest) { _, request in
+        // `initial` also applies a link that launched the app, before this view existed.
+        .onChange(of: router.deepLinkRequest, initial: true) { _, request in
             guard let request else { return }
+            router.deepLinkRequest = nil
             selectedTab = .explore
             explorePath = [request.route]
         }

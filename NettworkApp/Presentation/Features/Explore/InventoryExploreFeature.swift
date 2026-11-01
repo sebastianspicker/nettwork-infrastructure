@@ -25,7 +25,7 @@ final class InventoryExploreModel {
     private var searchGeneration: UInt64 = 0
     private var selectionGeneration: UInt64 = 0
     private var historyGeneration: UInt64 = 0
-    private(set) var account: AccountContext
+    let account: AccountContext
     private(set) var state: InventoryPresentationState = .loading
     var query = InventorySearchQuery()
     private(set) var results: [InventorySearchResult] = []
@@ -119,14 +119,6 @@ final class InventoryExploreModel {
         }
     }
 
-    func resolveDeepLink(_ url: URL) async {
-        guard let id = ObjectLink.objectID(from: url) else {
-            state = .quarantined("Only canonical Nettwork object links can be opened.")
-            return
-        }
-        await select(id)
-    }
-
     func toggleFavorite(_ id: ObjectID) async {
         let scope = InventoryAccountScope(account: account)
         historyGeneration &+= 1
@@ -142,21 +134,6 @@ final class InventoryExploreModel {
     /// picker (such as Trace) cannot change Explore's filters or recents.
     func isolatedSearchModel() -> InventoryExploreModel {
         InventoryExploreModel(account: account, queryService: queryService, historyStore: DiscardingInventoryHistoryStore())
-    }
-
-    func replaceAccount(_ account: AccountContext) {
-        searchGeneration &+= 1
-        selectionGeneration &+= 1
-        historyGeneration &+= 1
-        self.account = account
-        results = []
-        selectedDetails = nil
-        favorites = []
-        recents = []
-        favoriteResults = []
-        recentResults = []
-        siteOptions = []
-        state = .loading
     }
 
     private func isCurrentSearch(_ generation: UInt64, scope: InventoryAccountScope) -> Bool {

@@ -21,11 +21,25 @@
         case recordZoneFetchFailed
         case invalidStateSerialization
         case invalidRemoteIdentity
-        case missingDeletionIdentity(String)
         case duplicateRecordName(String)
         case identityIndexFailure
         case invalidRemoteAsset(ResourceKey)
         case unknownEvent
+    }
+
+    @available(iOS 17.0, macOS 14.0, macCatalyst 17.0, tvOS 17.0, watchOS 10.0, *)
+    extension CloudKitSyncEngineBatchSourceError {
+        /// No identity means the record was created and deleted between change tokens, so nothing local needs a
+        /// tombstone and the deletion is skipped (nil). A stored identity that does not match the deletion fails closed.
+        static func validatedDeletionIdentity(
+            _ identity: CloudRecordNameIdentity?, recordName: String, recordType: String, namespace: PersistenceNamespace
+        ) throws -> CloudRecordNameIdentity? {
+            guard let identity else { return nil }
+            guard identity.recordName == recordName, identity.recordType == recordType,
+                identity.recordName == CloudRecordNaming.recordName(for: identity.resourceKey, workspaceID: namespace.workspaceID)
+            else { throw invalidRemoteIdentity }
+            return identity
+        }
     }
 
     /// Failure bookkeeping for one batch source. Account changes, a deleted

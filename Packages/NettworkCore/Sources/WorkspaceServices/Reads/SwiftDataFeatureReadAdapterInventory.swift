@@ -58,7 +58,8 @@ extension SwiftDataFeatureReadAdapter {
     public func details(for id: ObjectID, in namespace: PersistenceNamespace) async throws -> InventoryObjectDetails? {
         let projection = try await readProjection(in: namespace)
         guard let result = activeInventoryResult(id, in: projection) else { return nil }
-        return inventoryDetails(for: result, in: projection)
+        let audits = try await reader.newestAudits(in: namespace, quarantining: true)
+        return inventoryDetails(for: result, in: projection, audits: audits)
     }
 
     public func results(for ids: [ObjectID], in namespace: PersistenceNamespace) async throws -> [InventorySearchResult] {
@@ -73,7 +74,7 @@ extension SwiftDataFeatureReadAdapter {
         }
     }
 
-    private func inventoryDetails(for result: InventorySearchResult, in projection: MirrorProjection) -> InventoryObjectDetails {
+    private func inventoryDetails(for result: InventorySearchResult, in projection: MirrorProjection, audits: [AuditEvent]) -> InventoryObjectDetails {
         return InventoryObjectDetails(
             result: result,
             containment: projection.containment(for: result.id),
@@ -82,7 +83,7 @@ extension SwiftDataFeatureReadAdapter {
             logicalContext: projection.logicalContext(for: result.id),
             reservationSummary: projection.reservationSummary(for: result.id),
             pendingSummary: pendingSummary(for: result),
-            recentAuditSummary: recentAuditSummary(for: result.id, in: projection),
+            recentAuditSummary: AuditReadLimits.recentSummary(for: result.id, in: audits),
             attachmentCount: projection.attachmentCount(for: result.id)
         )
     }
@@ -97,16 +98,6 @@ extension SwiftDataFeatureReadAdapter {
     private func pendingSummary(for result: InventorySearchResult) -> String? {
         guard result.isPending else { return nil }
         return "Planned or reserved work is present in the local mirror."
-    }
-
-    private func recentAuditSummary(for id: ObjectID, in projection: MirrorProjection) -> [String] {
-        projection.audits
-            .filter { audit in
-                audit.affectedObjectIDs.contains(id) || audit.affectedResourceKeys.contains(.object(id))
-            }
-            .sorted { $0.occurredAt > $1.occurredAt }
-            .prefix(10)
-            .map { "\($0.occurredAt.formatted()) · \($0.result.rawValue) · \($0.actorID)" }
     }
 
     public func hierarchy(in namespace: PersistenceNamespace) async throws -> [TopologyHierarchyNode] {

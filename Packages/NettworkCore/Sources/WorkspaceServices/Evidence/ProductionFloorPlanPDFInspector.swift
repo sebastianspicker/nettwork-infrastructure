@@ -70,7 +70,8 @@ public struct ProductionFloorPlanPDFInspector: FloorPlanPDFInspecting {
         guard bytes.starts(with: [0x25, 0x50, 0x44, 0x46, 0x2D]) else {
             throw ProductionFloorPlanPDFInspectorError.invalidSignature
         }
-        guard let document = PDFDocument(data: bytes),
+        // A locked PDF still reports a page with a default box, so check the lock explicitly.
+        guard let document = PDFDocument(data: bytes), !document.isLocked,
             (1...ContentSafetyService.maximumPDFPages).contains(document.pageCount)
         else {
             throw ProductionFloorPlanPDFInspectorError.invalidDocument

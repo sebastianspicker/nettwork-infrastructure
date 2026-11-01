@@ -10,7 +10,12 @@ public struct ObjectID: Codable, Hashable, Sendable, Identifiable, Comparable, C
 
     public var id: UUID { rawValue }
     public var description: String { rawValue.uuidString.lowercased() }
-    public static func < (lhs: Self, rhs: Self) -> Bool { lhs.description < rhs.description }
+    /// Byte order of the UUID equals the order of the lowercase hexadecimal strings, without building them.
+    public static func < (lhs: Self, rhs: Self) -> Bool {
+        withUnsafeBytes(of: lhs.rawValue.uuid) { left in
+            withUnsafeBytes(of: rhs.rawValue.uuid) { right in left.lexicographicallyPrecedes(right) }
+        }
+    }
 }
 
 /// The durable identity used by mutations, reservations, and synchronization.

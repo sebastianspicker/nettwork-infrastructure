@@ -99,8 +99,8 @@ extension SwiftDataCloudMirrorStore {
         _ transferID: ObjectID, incomingByKey: [ResourceKey: CloudRecordEnvelope], replacing oldRecords: [LocalMirrorRecord], namespace: PersistenceNamespace
     ) async throws {
         let session = try await stagedAssetSession(transferID, incomingByKey: incomingByKey, namespace: namespace)
-        let keys = try await transferMemberKeys(transferID, incomingByKey: incomingByKey, replacing: oldRecords, namespace: namespace)
-        guard keys.count <= LocalMirrorMaintenanceLimits.maximumTransferMembers, keys.count <= session.cursor else {
+        let count = try await transferMemberCount(transferID, incomingByKey: incomingByKey, replacing: oldRecords, namespace: namespace)
+        guard count <= LocalMirrorMaintenanceLimits.maximumTransferMembersTotal, count <= session.cursor else {
             throw CloudMirrorAdapterError.malformedPayload(
                 session.resourceKey,
                 "staged asset is outside acknowledged session cursor")
@@ -115,19 +115,23 @@ extension SwiftDataCloudMirrorStore {
         let indexed = try await persistence.storedLocalMirrors(for: [key], in: namespace).first
         guard let payload = incomingByKey[key]?.payload ?? indexed?.payload,
             let session = try? CloudDeterministicCoding.decode(CloudStagedTransferSession.self, from: payload), session.resourceKey == key,
-            session.status != .abandoned, session.cursor <= session.expectedMemberCount, session.cursor <= LocalMirrorMaintenanceLimits.maximumTransferMembers,
-            session.expectedMemberCount <= LocalMirrorMaintenanceLimits.maximumTransferMembers
+            session.status != .abandoned, session.cursor <= session.expectedMemberCount,
+            session.cursor <= LocalMirrorMaintenanceLimits.maximumTransferMembersTotal,
+            session.expectedMemberCount <= LocalMirrorMaintenanceLimits.maximumTransferMembersTotal
         else { throw CloudMirrorAdapterError.malformedPayload(key, "staged asset without transfer session") }
         return session
     }
 
-    private func transferMemberKeys(
+    /// Post-batch member count. A member row exists exactly for each stored
+    /// record staged under the transfer (index maintenance enforces it), and
+    /// `oldRecords` holds the stored row of every incoming key, so the rows
+    /// replaced by this batch are exactly its old records staged under it.
+    private func transferMemberCount(
         _ transferID: ObjectID, incomingByKey: [ResourceKey: CloudRecordEnvelope], replacing oldRecords: [LocalMirrorRecord], namespace: PersistenceNamespace
-    ) async throws -> Set<ResourceKey> {
-        var keys = Set(try await persistence.mirrorTransferMembers(transferID: transferID, in: namespace).map(\.resourceKey))
-        for old in oldRecords where stagedTransferID(old.visibility) == transferID { keys.remove(old.resourceKey) }
-        for envelope in incomingByKey.values where stagedTransferID(envelope.visibility) == transferID { keys.insert(envelope.resourceKey) }
-        return keys
+    ) async throws -> Int {
+        let stored = try await persistence.mirrorTransferMemberCount(transferID: transferID, in: namespace)
+        let replaced = oldRecords.filter { stagedTransferID($0.visibility) == transferID }.count
+        return stored - replaced + incomingByKey.values.filter { stagedTransferID($0.visibility) == transferID }.count
     }
 
     private func validateTransferQuota(

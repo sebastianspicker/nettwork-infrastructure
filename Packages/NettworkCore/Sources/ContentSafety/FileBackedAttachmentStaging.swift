@@ -154,31 +154,6 @@ public actor FileBackedPrivateAttachmentStaging: PrivateAttachmentStaging {
         entries[claim.token] = entry
     }
 
-    /// Removes in-process leases whose deadline has elapsed. Call this on
-    /// foreground transitions as well as before handing a lease to a platform
-    /// asset uploader.
-    @discardableResult
-    public func purgeExpired() throws -> Int {
-        let before = entries.count
-        try removeExpiredEntries()
-        return before - entries.count
-    }
-
-    /// An explicit launch-time recovery hook for an exclusively owned staging
-    /// root. It never follows links and does not touch files outside `root`.
-    public func discardAllStagedFiles() throws {
-        try ensurePrivateDirectory(root)
-        let manager = FileManager.default
-        for item in try manager.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey]) {
-            let values = try item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-            guard values.isDirectory == true, values.isSymbolicLink != true else {
-                throw FileAttachmentStagingError.unexpectedRootItem
-            }
-            try manager.removeItem(at: item)
-        }
-        entries.removeAll(keepingCapacity: false)
-    }
-
     private func removeExpiredEntries() throws {
         let deadline = now()
         let expired = entries.filter { $0.value.expiresAt <= deadline }
@@ -193,7 +168,10 @@ public actor FileBackedPrivateAttachmentStaging: PrivateAttachmentStaging {
     private func privateDirectory(for namespace: AttachmentNamespace) throws -> URL {
         try ensurePrivateDirectory(root)
         let directory = root.appendingPathComponent(namespaceKey(for: namespace), isDirectory: true)
+        let isNew = !FileManager.default.fileExists(atPath: directory.path)
         try ensurePrivateDirectory(directory)
+        // Only directories this code creates are marked; older ones are never swept.
+        if isNew { try StagingSweep.markDirectory(directory) }
         return directory
     }
 

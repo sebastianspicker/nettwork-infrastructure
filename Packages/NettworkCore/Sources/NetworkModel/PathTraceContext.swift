@@ -42,7 +42,7 @@ struct TraceContextResolver {
     func isTombstonedPort(_ id: ObjectID) -> Bool { tombstonedPorts.contains(id) }
     func isPassivePort(_ id: ObjectID) -> Bool {
         guard let port = ports[id], let device = devices[port.deviceID], let kind = deviceTypes[device.typeID]?.kind else { return false }
-        return [.patchPanel, .fiberPanel, .wallOutlet, .passive].contains(kind)
+        return kind.permitsPassThrough
     }
 
     func node(for id: ObjectID) -> RichTraceNode? {

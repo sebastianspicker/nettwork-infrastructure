@@ -42,6 +42,8 @@ private struct NettworkSceneRoot: View {
 
     private var productionRoot: some View {
         AppShell(router: launch.router)
+            // A new runtime (account switch) must not keep screens bound to the old account's models.
+            .id(ObjectIdentifier(launch.dependencies))
             .environment(launch.dependencies.shell)
             .tint(.nettworkAccent)
             #if os(iOS)
@@ -61,6 +63,6 @@ private struct NettworkSceneRoot: View {
             .onDisappear {
                 Task { await launch.stop() }
             }
-            .onOpenURL { launch.router.handle(url: $0) }
+            .onOpenURL { launch.open($0) }
     }
 }

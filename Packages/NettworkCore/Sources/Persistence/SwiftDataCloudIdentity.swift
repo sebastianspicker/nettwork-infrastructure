@@ -67,7 +67,29 @@ extension SwiftDataPersistenceStore {
         _ identity: LocalCloudRecordNameIdentity,
         in namespace: PersistenceNamespace, maximumEntries: Int
     ) throws {
-        try reconcileCloudRecordNameIdentities([identity], in: namespace, maximumEntries: maximumEntries)
+        try validateActiveLease(for: namespace)
+        guard maximumEntries >= LocalCloudRecordNameIdentityIndexLimits.minimumCapacity else {
+            throw PersistenceStoreError.cloudRecordNameIdentityCapacityExceeded(maximumEntries)
+        }
+        try validateCloudRecordNameIdentity(identity, in: namespace)
+        try transaction {
+            try validateActiveLease(for: namespace)
+            let storageKey = PersistenceNamespaceKey.storageKey(
+                namespace: namespace, identity: "cloud-record-name-identity:\(identity.recordName)")
+            let existing = try cloudRecordNameIdentityModel(matching: storageKey)
+            if existing == nil {
+                // Only a new row can exceed capacity; re-storing at capacity stays allowed.
+                let count = try cloudRecordNameIdentityCount(namespaceKey: PersistenceNamespaceKey.value(for: namespace))
+                guard count < maximumEntries else { throw PersistenceStoreError.cloudRecordNameIdentityCapacityExceeded(maximumEntries) }
+            }
+            try persistCloudRecordNameIdentity(identity, existing: existing)
+            try validateActiveLease(for: namespace)
+        }
+    }
+
+    func cloudRecordNameIdentityCount(namespaceKey: String) throws -> Int {
+        try modelContext.fetchCount(
+            FetchDescriptor<LocalCloudRecordNameIdentityModel>(predicate: #Predicate { $0.namespaceKey == namespaceKey }))
     }
 
     /// Explicit namespace teardown is the only deletion path for identity

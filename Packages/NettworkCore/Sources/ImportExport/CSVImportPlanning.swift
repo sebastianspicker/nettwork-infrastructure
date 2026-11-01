@@ -130,22 +130,24 @@ public protocol ImportStagingStore: Sendable {
 public enum CanonicalImportDigest {
     public static func digest(records: [ImportRecord]) -> String {
         var hasher = SHA256()
-        for record in records.sorted(by: canonicalLess) {
-            update(record.table, into: &hasher)
-            for key in record.values.keys.sorted() {
+        // Sort keys are built once per record, not once per comparison.
+        let keyed = records.map { record -> (table: String, text: String, keys: [String], record: ImportRecord) in
+            let keys = record.values.keys.sorted()
+            return (record.table, stableRecordText(record, keys: keys), keys, record)
+        }
+        for item in keyed.sorted(by: { $0.table == $1.table ? $0.text < $1.text : $0.table < $1.table }) {
+            update(item.table, into: &hasher)
+            for key in item.keys {
                 update(key, into: &hasher)
-                update(record.values[key] ?? "", into: &hasher)
+                update(item.record.values[key] ?? "", into: &hasher)
             }
             hasher.update(data: Data([0x1E]))
         }
         return HexDigest.string(hasher.finalize())
     }
 
-    private static func canonicalLess(_ lhs: ImportRecord, _ rhs: ImportRecord) -> Bool {
-        lhs.table == rhs.table ? stableRecordText(lhs) < stableRecordText(rhs) : lhs.table < rhs.table
-    }
-    private static func stableRecordText(_ record: ImportRecord) -> String {
-        record.values.keys.sorted().map { "\($0)\u{1F}\(record.values[$0] ?? "")" }.joined(separator: "\u{1E}")
+    private static func stableRecordText(_ record: ImportRecord, keys: [String]) -> String {
+        keys.map { "\($0)\u{1F}\(record.values[$0] ?? "")" }.joined(separator: "\u{1E}")
     }
     private static func update(_ string: String, into hasher: inout SHA256) {
         let bytes = Data(string.utf8)

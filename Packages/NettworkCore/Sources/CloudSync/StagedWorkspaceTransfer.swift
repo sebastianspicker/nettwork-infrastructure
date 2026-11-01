@@ -104,63 +104,6 @@ public enum CloudStagedTransferCommitment {
         }
     }
 }
-public enum CloudStagedTransferLifecycle {
-    /// Session-first and workspace-final delivery are both invisible. Activation
-    /// is derived only when all staged members, a complete session, and the
-    /// authoritative workspace lifecycle commit agree; malformed state fails closed.
-    public static func derive(
-        records: [LocalMirrorRecord], namespace: PersistenceNamespace
-    ) throws -> LocalWorkspaceVisibilityState {
-        let live = records.filter { !$0.isTombstone }
-        let workspaces = try live.filter { $0.recordType == CloudRecordNaming.workspaceRecordType }.map {
-            try CloudDeterministicCoding.decode(CloudWorkspaceRecord.self, from: $0.payload ?? Data())
-        }
-        guard workspaces.count == 1, let workspace = workspaces.first else {
-            return LocalWorkspaceVisibilityState(namespace: namespace, lifecycle: .empty(epoch: 0))
-        }
-        guard case let .active(commit) = workspace.lifecycle else {
-            return LocalWorkspaceVisibilityState(namespace: namespace, lifecycle: workspace.lifecycle)
-        }
-        let sessions = try live.filter { $0.recordType == CloudStagedTransferRecordType.session }.map {
-            try CloudDeterministicCoding.decode(CloudStagedTransferSession.self, from: $0.payload ?? Data())
-        }
-        guard let session = sessions.first(where: { $0.transferID == commit.transferID }),
-            session.status == .complete, session.cursor == commit.memberCount,
-            session.rollingDigest == commit.rollingDigest,
-            session.expectedMemberCount == commit.memberCount,
-            session.expectedRollingDigest == commit.rollingDigest
-        else {
-            return LocalWorkspaceVisibilityState(namespace: namespace, lifecycle: .empty(epoch: sessionEpoch(workspace.lifecycle)))
-        }
-        let members = records.filter {
-            if case let .staged(transferID) = $0.visibility { return transferID == commit.transferID }
-            return false
-        }.sorted { $0.resourceKey < $1.resourceKey }
-        guard members.count == commit.memberCount else {
-            return LocalWorkspaceVisibilityState(namespace: namespace, lifecycle: .empty(epoch: session.epoch))
-        }
-        var rolling = CloudStagedTransferCommitment.initial(transferID: session.transferID, operationID: session.operationID)
-        for (index, member) in members.enumerated() {
-            let digest = CloudStagedTransferCommitment.member(
-                recordType: member.recordType, resourceKey: member.resourceKey,
-                schemaVersion: member.schemaVersion, payload: member.payload ?? Data(),
-                isDeleted: member.isTombstone, visibility: member.visibility,
-                assetMetadata: member.recordAssetMetadata)
-            rolling = CloudStagedTransferCommitment.append(previous: rolling, index: index, memberDigest: digest)
-        }
-        guard rolling == commit.rollingDigest else {
-            return LocalWorkspaceVisibilityState(namespace: namespace, lifecycle: .empty(epoch: session.epoch))
-        }
-        return LocalWorkspaceVisibilityState(namespace: namespace, lifecycle: workspace.lifecycle)
-    }
-
-    private static func sessionEpoch(_ lifecycle: WorkspaceLifecycle) -> UInt64 {
-        switch lifecycle {
-        case let .empty(epoch): return epoch
-        case .active: return 0
-        }
-    }
-}
 /// Receipt-free transport used for resumable session CAS writes. An accepted
 /// result proves the bounded batch, whereas an indeterminate result must be
 /// resolved by reading the deterministic session cursor before retrying.

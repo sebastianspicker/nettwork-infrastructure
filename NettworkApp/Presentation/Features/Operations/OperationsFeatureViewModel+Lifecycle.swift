@@ -53,6 +53,7 @@ extension OperationsFeatureViewModel {
         let snapshot = draft
         validationGeneration &+= 1
         let generation = validationGeneration
+        let startPhase = phase
         phase = .validating
         do {
             let result = try await service.validateDraft(snapshot, authorization: authorization)
@@ -68,6 +69,7 @@ extension OperationsFeatureViewModel {
             lastError = nil
         } catch {
             guard generation == validationGeneration, draft == snapshot else { return }
+            phase = startPhase
             fail(error)
         }
     }
@@ -114,6 +116,7 @@ extension OperationsFeatureViewModel {
         defer { finishLifecycleOperation(operation) }
         let snapshot = draft
         let expectedDigest = validation.exactIntentDigest
+        let startPhase = phase
         phase = .reserving
         do {
             let result = try await service.reserve(snapshot, authorization: authorization)
@@ -128,6 +131,7 @@ extension OperationsFeatureViewModel {
                 await bindPreparedEvidenceAlreadyLocked(using: evidenceAuthorization)
             }
         } catch {
+            phase = startPhase
             fail(error)
         }
     }
@@ -172,12 +176,16 @@ extension OperationsFeatureViewModel {
         }
         guard let operation = beginLifecycleOperation() else { return }
         defer { finishLifecycleOperation(operation) }
+        let startPhase = phase
         phase = .requestingApproval
         do {
             try await service.requestApproval(for: draft.id, authorization: authorization)
             phase = .approved
             lastError = nil
-        } catch { fail(error) }
+        } catch {
+            phase = startPhase
+            fail(error)
+        }
     }
 
     func beginExecution(using authorization: OperationsAuthorization) async {
@@ -189,6 +197,7 @@ extension OperationsFeatureViewModel {
         }
         guard let operation = beginLifecycleOperation() else { return }
         defer { finishLifecycleOperation(operation) }
+        let startPhase = phase
         phase = .beginningExecution
         do {
             try await service.beginExecution(
@@ -199,7 +208,10 @@ extension OperationsFeatureViewModel {
             )
             phase = .executing
             lastError = nil
-        } catch { fail(error) }
+        } catch {
+            phase = startPhase
+            fail(error)
+        }
     }
 
     func complete(using authorization: OperationsAuthorization) async {
@@ -213,6 +225,7 @@ extension OperationsFeatureViewModel {
         }
         guard let operation = beginLifecycleOperation() else { return }
         defer { finishLifecycleOperation(operation) }
+        let startPhase = phase
         phase = .completing
         do {
             try await service.complete(
@@ -222,7 +235,10 @@ extension OperationsFeatureViewModel {
             )
             phase = .completed
             lastError = nil
-        } catch { fail(error) }
+        } catch {
+            phase = startPhase
+            fail(error)
+        }
     }
 
     func requestCancellation(reason: String, physicalStatus: CancellationPhysicalStatus, using authorization: OperationsAuthorization) async {
@@ -282,6 +298,7 @@ extension OperationsFeatureViewModel {
             fail("The physical attestation must exactly match the authorized release attestation.")
             return
         }
+        let startPhase = phase
         phase = .resolvingCancellation
         do {
             try await service.resolveCancellation(
@@ -294,6 +311,7 @@ extension OperationsFeatureViewModel {
             phase = .completed
             lastError = nil
         } catch {
+            phase = startPhase
             fail(error)
         }
     }

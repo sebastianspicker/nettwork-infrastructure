@@ -6,10 +6,11 @@ import WorkspaceChangeControl
 extension SwiftDataCloudMirrorStore {
     public func applyVerifiedBatch(_ records: [VerifiedCloudRecord], syncState: Data, namespace: PersistenceNamespace) async throws {
         let lease = try requireOpen(namespace)
-        let now = Date.now
-        let localRecords = localMirrorRecords(records, namespace: namespace, now: now)
-        let candidateKeys = Set(localRecords.map(\.resourceKey))
+        let candidateKeys = Set(records.map(\.envelope.resourceKey))
         let storedBefore = try await persistence.storedLocalMirrors(for: candidateKeys, in: namespace)
+        // A device clock moved back must not stamp below the replaced rows (staleMirrorUpdate).
+        let now = storedBefore.map(\.serverModifiedAt).reduce(self.now(), max)
+        let localRecords = localMirrorRecords(records, namespace: namespace, now: now)
         let cleanupCandidates = attachmentCleanupCandidates(storedBefore, records: records)
         let maintenance = try CloudMirrorMaintenanceFactBuilder.build(for: records)
         try await validateAssetAdmission(
@@ -17,7 +18,8 @@ extension SwiftDataCloudMirrorStore {
             maintenance: maintenance, namespace: namespace)
         do {
             try await stageVerifiedAssets(records, namespace: namespace)
-            try await apply(localRecords, syncState: syncState, maintenance: maintenance, namespace: namespace, lease: lease, now: now)
+            try await apply(
+                localRecords, replacing: storedBefore, syncState: syncState, maintenance: maintenance, namespace: namespace, lease: lease, now: now)
             // Mirror/index/evidence projection has already committed. Cleanup
             // is best effort only; durable staging markers retain exact retry
             // candidates and must not turn an accepted mirror batch into an
@@ -98,10 +100,10 @@ extension SwiftDataCloudMirrorStore {
     }
 
     private func apply(
-        _ records: [LocalMirrorRecord], syncState: Data, maintenance: LocalMirrorMaintenanceBatch, namespace: PersistenceNamespace,
-        lease: PersistenceNamespaceLease, now: Date
+        _ records: [LocalMirrorRecord], replacing stored: [LocalMirrorRecord], syncState: Data, maintenance: LocalMirrorMaintenanceBatch,
+        namespace: PersistenceNamespace, lease: PersistenceNamespaceLease, now: Date
     ) async throws {
-        let visibility = try await deriveWorkspaceVisibilityIndexed(applying: records, maintenance: maintenance, namespace: namespace)
+        let visibility = try await workspaceVisibility(applying: records, replacing: stored, maintenance: maintenance, namespace: namespace)
         let state = LocalSyncState(namespace: namespace, engineState: syncState, changeToken: nil, lastSuccessfulServerContact: now, updatedAt: now)
         try await persistence.applyVerifiedMirrorBatch(
             LocalMirrorBatch(records: records, syncState: state, workspaceVisibility: visibility, maintenance: maintenance), in: namespace, lease: lease)

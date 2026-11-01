@@ -20,6 +20,7 @@ final class TraceInspectionModel {
     private(set) var selectedNodeID: ObjectID?
     private(set) var copiedIdentifier: String?
     private(set) var stagedWorkOrderID: ObjectID?
+    private(set) var isStaging = false
     var draftTitle = ""
     var draftTicket = ""
     var draftNotes = ""
@@ -82,6 +83,7 @@ final class TraceInspectionModel {
     }
 
     func stageWork(from segment: TraceSegmentSnapshot) async {
+        guard !isStaging else { return }
         guard let seed = segment.workOrderRequest else {
             state = .unavailable("This segment has no complete typed work-order command, so no change can be staged.")
             return
@@ -97,6 +99,8 @@ final class TraceInspectionModel {
             state = .unavailable("Work-order staging is unavailable for this trace.")
             return
         }
+        isStaging = true
+        defer { isStaging = false }
         do {
             let request = TopologyWorkOrderRequest(
                 title: title.isEmpty ? seed.title : title,
@@ -110,7 +114,8 @@ final class TraceInspectionModel {
             await onStagedWorkOrder?(workOrderID)
             state = .pending("A trace segment change was staged in work order \(workOrderID.description).")
         } catch {
-            state = .conflict("The trace segment draft could not reserve its complete resource set.")
+            state = StagingFailurePresentation.state(
+                for: error, conflictMessage: "The trace segment draft could not reserve its complete resource set.")
         }
     }
 }

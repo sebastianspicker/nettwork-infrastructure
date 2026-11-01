@@ -76,11 +76,11 @@ public actor FileBackedCSVImportStagingStore: ImportStagingStore {
             namespace: plan.namespace, generation: plan.stagingGeneration)
         let directory = root.appendingPathComponent(handle.id.description, isDirectory: true)
         if FileManager.default.fileExists(atPath: directory.path) {
+            try FileBackedStagingFiles.requireSidecar(sidecarURL(in: directory))
             return try reopenStaging(handle, for: plan)
         }
-        try FileBackedStagingFiles.ensureNewPrivateDirectory(directory)
         let entry = Entry(handle: handle, directory: directory, plan: plan, isStaged: false)
-        try writeSidecar(for: entry)
+        try FileBackedStagingFiles.createNewPrivateDirectory(directory) { try writeSidecar(for: entry) }
         entries[handle.id] = entry
         return handle
     }

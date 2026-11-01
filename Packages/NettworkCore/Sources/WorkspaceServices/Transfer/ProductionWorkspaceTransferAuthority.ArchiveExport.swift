@@ -44,7 +44,7 @@ extension ProductionWorkspaceTransferAuthority {
 
     func archiveAssets(in namespace: PersistenceNamespace, records: [LocalMirrorRecord]) async throws -> [ArchiveAssetPayload] {
         var catalog = try ArchiveAssetCatalog(records: records)
-        let supplied = try await assetSource.assets(in: namespace)
+        let supplied = try await assetSource.assets(in: namespace, records: records)
         var paths = Set<String>()
         var result: [ArchiveAssetPayload] = []
         for asset in supplied {

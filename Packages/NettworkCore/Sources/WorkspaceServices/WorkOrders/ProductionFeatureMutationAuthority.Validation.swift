@@ -83,22 +83,6 @@ extension ProductionFeatureMutationAuthority {
             && Set(desired.map(\.vlanID)).count == desired.count
     }
 
-    func resourceKeys(for assignments: InterfaceAddressAssignmentSet) -> Set<ResourceKey> {
-        var keys: Set<ResourceKey> = [.object(assignments.revisionVRF.id), .object(assignments.interfaceID)]
-        for assignment in assignments.currentAssignments + assignments.desiredAssignments {
-            keys.formUnion([.object(assignment.id), .string(assignment.addressID), .object(assignment.interfaceID)])
-        }
-        return keys
-    }
-
-    func resourceKeys(for memberships: InterfaceVLANMembershipSet) -> Set<ResourceKey> {
-        var keys: Set<ResourceKey> = [.object(memberships.revisionVRF.id), .object(memberships.interfaceID)]
-        for membership in memberships.currentMemberships + memberships.desiredMemberships {
-            keys.formUnion([.object(membership.id), .object(membership.interfaceID), .object(membership.vlanID)])
-        }
-        return keys
-    }
-
     func presentation(for workOrder: WorkOrder, confirmation: WorkOrderReservationPresentation.Confirmation) -> WorkOrderReservationPresentation {
         guard let reservation = workOrder.reservation, let exactIntentDigest = workOrder.intentDigest else {
             preconditionFailure("Reservation presentation requires a reserved work order with an intent digest.")

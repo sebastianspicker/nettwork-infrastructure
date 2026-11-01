@@ -14,7 +14,7 @@
                 "The iCloud account or workspace changed. Open the workspace again and sync."
             case .recordZoneFetchFailed, .unexpectedZone, .unknownEvent:
                 "Syncing with iCloud failed. Check your connection and try again."
-            case .invalidRemoteIdentity, .missingDeletionIdentity, .duplicateRecordName, .identityIndexFailure, .invalidRemoteAsset:
+            case .invalidRemoteIdentity, .duplicateRecordName, .identityIndexFailure, .invalidRemoteAsset:
                 "The cloud returned data that could not be used. Sync again."
             }
         }

@@ -24,6 +24,7 @@ final class IPAMWorkspaceModel {
     private(set) var selectedVRFID: ObjectID?
     private(set) var selectedPrefixID: ObjectID?
     var stagedWorkOrderID: ObjectID?
+    var isStaging = false
     private(set) var validationExplanation: String?
     private(set) var prefixEditorID: ObjectID?
 

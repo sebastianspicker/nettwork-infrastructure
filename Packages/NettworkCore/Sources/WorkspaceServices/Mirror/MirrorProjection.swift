@@ -18,8 +18,7 @@ struct MirrorProjection {
         WorkspaceRecordType.vrf, WorkspaceRecordType.prefix,
         LocalRecordKind.prefix, WorkspaceRecordType.ipAddressRecord, WorkspaceRecordType.vlanGroup,
         WorkspaceRecordType.vlan, WorkspaceRecordType.interface, WorkspaceRecordType.ipAddressAssignment,
-        WorkspaceRecordType.interfaceVLANMembership, CloudRecordNaming.auditRecordType,
-        LocalRecordKind.auditEvent, CloudRecordNaming.workOrderRecordType,
+        WorkspaceRecordType.interfaceVLANMembership, CloudRecordNaming.workOrderRecordType,
         LocalRecordKind.workOrder, CloudRecordNaming.attachmentEvidenceBindingRecordType,
         CloudRecordNaming.floorPlanAssetBindingRecordType,
     ]
@@ -50,7 +49,6 @@ struct MirrorProjection {
     let interfaces: [Interface]
     let assignments: [IPAddressAssignment]
     let memberships: [InterfaceVLANMembership]
-    let audits: [AuditEvent]
     let workOrders: [WorkOrder]
     let attachmentEvidenceBindings: [AttachmentEvidenceBindingRecord]
     let floorPlanAssetBindings: [FloorPlanAssetBindingRecord]
@@ -92,7 +90,6 @@ struct MirrorProjection {
         memberships = try self.records.decoded(
             InterfaceVLANMembership.self, recordType: WorkspaceRecordType.interfaceVLANMembership,
             expectedResourceKey: { .object($0.id) })
-        audits = try self.records.decoded(AuditEvent.self, recordType: CloudRecordNaming.auditRecordType, expectedResourceKey: { .object($0.id) })
         workOrders = try self.records.decoded(WorkOrder.self, recordType: CloudRecordNaming.workOrderRecordType, expectedResourceKey: { .object($0.id) })
         attachmentEvidenceBindings = try self.records.decoded(
             AttachmentEvidenceBindingRecord.self,

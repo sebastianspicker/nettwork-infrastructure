@@ -37,17 +37,10 @@ public actor SwiftDataCloudRecordNameIdentityIndex: CloudRecordNameIdentityIndex
     public func identity(for recordName: String, in requestedNamespace: PersistenceNamespace) async throws -> CloudRecordNameIdentity? {
         try requireNamespace(requestedNamespace)
 
-        // A verified local mirror is more current than an index row retained
-        // across a previous launch or mirror rebuild. Reconcile this one name
-        // first, then use the durable row when no mirrored evidence remains.
-        if let mirroredIdentity = try await mirroredIdentity(for: recordName) {
-            try await persistence.storeCloudRecordNameIdentity(mirroredIdentity, in: namespace, maximumEntries: maximumEntries)
-            return try cloudIdentity(from: mirroredIdentity)
-        }
-
-        guard let identity = try await persistence.cloudRecordNameIdentity(for: recordName, in: namespace) else {
-            return nil
-        }
+        // Every fetched record is indexed before it is applied, and startup runs
+        // `reconcileFromMirroredRecords`, so a missing row means a record this
+        // device never saw; no per-deletion mirror scan is needed.
+        guard let identity = try await persistence.cloudRecordNameIdentity(for: recordName, in: namespace) else { return nil }
         return try cloudIdentity(from: identity)
     }
 
@@ -91,13 +84,6 @@ public actor SwiftDataCloudRecordNameIdentityIndex: CloudRecordNameIdentityIndex
     private func requireNamespace(_ requestedNamespace: PersistenceNamespace) throws {
         guard requestedNamespace == namespace else {
             throw SwiftDataCloudRecordNameIdentityIndexError.namespaceMismatch
-        }
-    }
-
-    private func mirroredIdentity(for recordName: String) async throws -> LocalCloudRecordNameIdentity? {
-        let records = try await persistence.mirroredRecords(in: namespace)
-        return records.lazy.compactMap { self.localIdentity(from: $0) }.first {
-            $0.recordName == recordName
         }
     }
 

@@ -98,6 +98,10 @@ final class ProductionAppLaunchController {
     private let accountChanges: ProductionCloudAccountChangeObserver
     private var assembly: ProductionRuntimeAssembly?
     private var hasStarted = false
+    /// A link that arrives while the runtime is still being assembled waits here, so the
+    /// placeholder shell (which may consume links) never sees it; delivered once the real router exists.
+    private var isAwaitingRuntime = true
+    private var pendingLink: URL?
     /// Startup failures are otherwise visible only as on-screen status text;
     /// the privacy-safe label lets bug reports name the failing step.
     private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Nettwork", category: "launch")
@@ -162,6 +166,7 @@ final class ProductionAppLaunchController {
     private func performStart(_ systemPlatformCapabilities: ProductionRuntimeAssembly.OrganizationInput.PlatformCapabilities) async {
         guard !hasStarted else { return }
         hasStarted = true
+        isAwaitingRuntime = true
         platformCapabilities = systemPlatformCapabilities
         do {
             if explicitComposition == nil,
@@ -177,6 +182,7 @@ final class ProductionAppLaunchController {
                 dependencies = production.composition.dependencies
                 router = production.composition.router
             }
+            deliverPendingLink()
             await dependencies.bootstrap()
         } catch {
             Self.logger.error("startup failed: \(PrivacySafeErrorDiagnostics.label(for: error), privacy: .public)")
@@ -191,9 +197,25 @@ final class ProductionAppLaunchController {
             assembly = nil
             dependencies = failed.dependencies
             router = failed.router
+            deliverPendingLink()
             await dependencies.bootstrap()
         }
         lastForegroundSync = .now
+    }
+
+    /// Routes an incoming `nettwork://` link; while the runtime is assembling it is held back.
+    func open(_ url: URL) {
+        guard !isAwaitingRuntime else {
+            pendingLink = url
+            return
+        }
+        router.handle(url: url)
+    }
+
+    private func deliverPendingLink() {
+        isAwaitingRuntime = false
+        if let pendingLink { router.handle(url: pendingLink) }
+        pendingLink = nil
     }
 
     private func performStop() async {

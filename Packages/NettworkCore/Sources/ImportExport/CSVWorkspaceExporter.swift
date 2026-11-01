@@ -286,7 +286,7 @@ public enum CSVWorkspaceExporter {
     private static func record(_ table: CSVTable, _ values: [String: String]) -> ImportRecord {
         ImportRecord(table: table.rawValue, values: values)
     }
-    private static func validate(rows: [[String]]) throws {
+    static func validate(rows: [[String]]) throws {
         for row in rows {
             for value in row {
                 guard Data(CSVExport.escapedCell(value).utf8).count <= CSVImportLimits.maximumCellBytes else {
@@ -294,7 +294,8 @@ public enum CSVWorkspaceExporter {
                 }
             }
             let encodedRow = CSVExport.encode(rows: [row])
-            guard encodedRow.count >= 2, encodedRow.count - 2 <= CSVImportLimits.maximumRowBytes else {
+            // The parser counts the CRLF terminator toward the row limit, so the encoded row must too.
+            guard encodedRow.count >= 2, encodedRow.count <= CSVImportLimits.maximumRowBytes else {
                 throw CSVImportError.rowTooLarge
             }
         }

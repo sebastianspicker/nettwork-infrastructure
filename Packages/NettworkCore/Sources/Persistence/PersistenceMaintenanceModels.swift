@@ -6,7 +6,8 @@ import WorkspaceChangeControl
 
 public enum LocalMirrorMaintenanceLimits {
     public static let schemaVersion = 9
-    public static let maximumTransferMembers = 200
+    // Must equal ImportExport's `WorkspaceTransferLimits.maximumRows`; Persistence cannot import ImportExport.
+    public static let maximumTransferMembersTotal = 250_000
 }
 
 public struct LocalMirrorReferenceEdge: Hashable, Sendable {
@@ -222,7 +223,7 @@ public final class LocalQuarantineModel {
     public var capturedAt: Date
 
     public init(record: LocalQuarantineRecord) throws {
-        self.storageKey = PersistenceNamespaceKey.storageKey(namespace: record.namespace, identity: "quarantine:\(record.id.description)")
+        self.storageKey = PersistenceNamespaceKey.storageKey(namespace: record.namespace, identity: "quarantine:\(try record.rejectionDigest())")
         self.namespaceKey = PersistenceNamespaceKey.value(for: record.namespace)
         self.recordData = try PersistenceCoding.encode(record)
         self.capturedAt = record.capturedAt

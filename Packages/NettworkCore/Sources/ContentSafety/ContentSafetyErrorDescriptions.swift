@@ -13,8 +13,6 @@ extension ContentSafetyError: LocalizedError {
             "Animated images are not supported. Choose a still image."
         case .invalidDimensions, .invalidPDFPageBoxes, .missingSelectedPDFPage, .invalidSelectedPDFPage:
             "The file has unusable dimensions or pages. Choose a different file."
-        case .invalidStateTransition:
-            "The file could not be processed in its current state. Choose the file again."
         case .decoderUnavailable, .decodeFailed:
             "The file could not be opened. It may be damaged. Choose a different file."
         }

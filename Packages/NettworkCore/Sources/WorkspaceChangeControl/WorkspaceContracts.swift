@@ -109,24 +109,21 @@ public struct AuthorizedOperationContext: Codable, Hashable, Sendable {
     }
 }
 
-/// Read-only repository seams. Privileged changes use the single commit boundary below.
-public protocol TopologyRepository: Sendable { func topology(in namespace: PersistenceNamespace) async throws -> PhysicalTopology }
-public protocol IPAMRepository: Sendable { func prefixes(in vrfID: ObjectID, namespace: PersistenceNamespace) async throws -> [Prefix] }
-public protocol WorkOrderRepository: Sendable { func workOrder(id: ObjectID, namespace: PersistenceNamespace) async throws -> WorkOrder? }
-public protocol AuditRepository: Sendable { func auditEvents(for resourceKey: ResourceKey, namespace: PersistenceNamespace) async throws -> [AuditEvent] }
-public protocol AttachmentStore: Sendable {
-    func store(_ data: Data, contentType: String, namespace: PersistenceNamespace) async throws -> ObjectID
-    func data(for id: ObjectID, namespace: PersistenceNamespace) async throws -> Data
-    func remove(id: ObjectID, namespace: PersistenceNamespace) async throws
-}
 public protocol MutationOutbox: Sendable {
     func enqueue(_ operation: OutboxOperation) async throws
     func operations(in namespace: PersistenceNamespace) async throws -> [OutboxOperation]
-    func operationsReady(at date: Date, in namespace: PersistenceNamespace) async throws -> [OutboxOperation]
+    /// Unaccepted operations plus the IDs of accepted ones; stores may skip decoding accepted history.
+    func unacceptedOperations(in namespace: PersistenceNamespace) async throws -> (operations: [OutboxOperation], acceptedIDs: Set<ObjectID>)
     func status(in namespace: PersistenceNamespace) async throws -> OutboxStatus
     func recordAttempt(operationID: ObjectID, at date: Date, namespace: PersistenceNamespace) async throws
     func recordFailure(operationID: ObjectID, failure: SyncFailure, nextRetryAt: Date?, poison: Bool, namespace: PersistenceNamespace) async throws
     func recordAcceptance(operationID: ObjectID, receipt: OperationReceipt, namespace: PersistenceNamespace) async throws
+}
+extension MutationOutbox {
+    public func unacceptedOperations(in namespace: PersistenceNamespace) async throws -> (operations: [OutboxOperation], acceptedIDs: Set<ObjectID>) {
+        let all = try await operations(in: namespace)
+        return (all.filter { $0.state != .accepted }, Set(all.filter { $0.state == .accepted && $0.receipt != nil }.map(\.operationID)))
+    }
 }
 public protocol SyncCoordinator: Sendable { func synchronizeForeground() async -> SyncReceipt }
 public protocol ConflictResolver: Sendable {

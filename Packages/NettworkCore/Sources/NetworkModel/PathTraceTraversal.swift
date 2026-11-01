@@ -119,14 +119,14 @@ public enum DefaultPathTraceService {
             state.didReachPathLimit = true
             return []
         }
+        let candidates = graph[current, default: []].filter { !usedSegments.contains(SegmentIdentity(id: $0.segment.id, kind: $0.segment.kind)) }
+        guard !candidates.isEmpty else {
+            return emitTerminalPath(current: current, visitedPorts: visitedPorts, segments: segments, warnings: warnings, resolver: resolver, state: &state)
+        }
         if segments.count >= state.limits.maximumSegmentsPerPath {
             return emitRichPath(
                 portIDs: visitedPorts, segments: segments, termination: .segmentLimit,
                 warnings: warnings + [.segmentLimitReached(state.limits.maximumSegmentsPerPath)], resolver: resolver, state: &state)
-        }
-        let candidates = graph[current, default: []].filter { !usedSegments.contains(SegmentIdentity(id: $0.segment.id, kind: $0.segment.kind)) }
-        guard !candidates.isEmpty else {
-            return emitTerminalPath(current: current, visitedPorts: visitedPorts, segments: segments, warnings: warnings, resolver: resolver, state: &state)
         }
         let branchWarnings = candidates.count > 1 ? warnings + [.ambiguousContinuation(portID: current, count: candidates.count)] : warnings
         return candidates.flatMap {

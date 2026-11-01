@@ -1,3 +1,4 @@
+import ContentSafety
 import CryptoKit
 import Foundation
 import NetworkModel
@@ -27,11 +28,12 @@ extension ArchiveVerifier {
         stagingRoot: URL
     ) throws -> FileBackedVerifiedArchive {
         defer { (source as? any ArchiveEntrySourceAccessLifetime)?.close() }
-        let normalized = try normalizeForFileBacking(try source.entries())
+        let normalized = try ArchiveEntryValidation.normalize(try source.entries()).sorted { $0.1 < $1.1 }
         try FileBackedStagingFiles.ensurePrivateDirectory(stagingRoot)
         let directory = stagingRoot.appendingPathComponent(UUID().uuidString.lowercased(), isDirectory: true)
         try FileBackedStagingFiles.ensureNewPrivateDirectory(directory)
         do {
+            try StagingSweep.markDirectory(directory)
             let entries = try copyEntries(normalized, source: source, destination: directory)
             let digests = Dictionary(uniqueKeysWithValues: entries.map { ($0.metadata.path, $0.digest) })
             let manifest = try validateFileBackedArchive(directory: directory, entries: entries, digests: digests)
@@ -44,54 +46,6 @@ extension ArchiveVerifier {
             try? FileManager.default.removeItem(at: directory)
             throw error
         }
-    }
-
-    private func normalizeForFileBacking(
-        _ supplied: [ArchiveEntryMetadata]
-    ) throws -> [(ArchiveEntryMetadata, String)] {
-        guard supplied.count <= ArchiveSafetyLimits.maximumEntries else {
-            throw ArchiveValidationError.archiveTooLarge
-        }
-        var collisionKeys = Set<String>()
-        var total = 0
-        var normalized: [(ArchiveEntryMetadata, String)] = []
-        for entry in supplied {
-            try Task.checkCancellation()
-            let path = try ArchivePathPolicy.normalized(entry.path)
-            guard collisionKeys.insert(ArchivePathPolicy.collisionKey(path)).inserted else {
-                throw ArchiveValidationError.duplicatePath(path)
-            }
-            try validateFileBackedMetadata(entry, path: path)
-            guard entry.uncompressedSize <= ArchiveSafetyLimits.maximumExpandedBytes - total else {
-                throw ArchiveValidationError.archiveTooLarge
-            }
-            total += entry.uncompressedSize
-            normalized.append((entry, path))
-        }
-        for required in [ArchiveLayout.manifestPath, ArchiveLayout.recordsPath, ArchiveLayout.auditPath, ArchiveLayout.completionPath] {
-            guard normalized.contains(where: { $0.1 == required }) else {
-                throw ArchiveValidationError.requiredEntryMissing(required)
-            }
-        }
-        return normalized.sorted { $0.1 < $1.1 }
-    }
-
-    private func validateFileBackedMetadata(_ entry: ArchiveEntryMetadata, path: String) throws {
-        guard ArchivePathPolicy.isAllowed(path, kind: entry.kind) else {
-            if entry.kind != .regularFile && entry.kind != .directory {
-                throw ArchiveValidationError.forbiddenEntryKind(path)
-            }
-            throw ArchiveValidationError.unknownEntry(path)
-        }
-        guard entry.uncompressedSize >= 0, entry.compressedSize >= 0,
-            entry.uncompressedSize <= ArchiveSafetyLimits.maximumEntryBytes
-        else { throw ArchiveValidationError.invalidEntryMetadata(path) }
-        guard
-            entry.uncompressedSize == 0
-                || (entry.compressedSize > 0
-                    && entry.compressedSize <= Int.max / ArchiveSafetyLimits.maximumExpansionRatio
-                    && entry.uncompressedSize <= entry.compressedSize * ArchiveSafetyLimits.maximumExpansionRatio)
-        else { throw ArchiveValidationError.expansionLimitExceeded }
     }
 
     private func copyEntries(
@@ -164,7 +118,8 @@ extension ArchiveVerifier {
         let marker = try decodedCompletionMarker(in: directory)
         try validateFileBackedManifestHeader(manifest, marker: marker, digests: digests)
         let verifiedAudit = try verifiedAudit(in: directory)
-        guard try recordCount(in: directory) == ArchiveManifestRecordCounts.total(manifest.recordCounts),
+        guard manifest.auditRecordCount >= 0, manifest.auditRecordCount <= WorkspaceTransferLimits.maximumRows,
+            try recordCount(in: directory) == ArchiveManifestRecordCounts.total(manifest.recordCounts),
             verifiedAudit.count == manifest.auditRecordCount,
             verifiedAudit.headSHA256 == manifest.auditHeadSHA256
         else { throw ArchiveValidationError.manifestMismatch }
@@ -197,7 +152,7 @@ extension ArchiveVerifier {
     }
 
     private func recordCount(in directory: URL) throws -> Int {
-        try countJSONL(readRequiredEntry(ArchiveLayout.recordsPath, in: directory))
+        try ArchiveEntryValidation.countJSONL(readRequiredEntry(ArchiveLayout.recordsPath, in: directory))
     }
 
     private func readRequiredEntry(_ path: String, in directory: URL) throws -> Data {
@@ -245,29 +200,5 @@ extension ArchiveVerifier {
             else { throw ArchiveValidationError.manifestMismatch }
         }
         guard paths == actualPaths else { throw ArchiveValidationError.manifestMismatch }
-    }
-
-    private func countJSONL(_ data: Data) throws -> Int {
-        var count = 0
-        var hasBytes = false
-        var scanned = 0
-        for byte in data {
-            scanned += 1
-            if scanned & 0xFFFF == 0 { try Task.checkCancellation() }
-            if byte == 0x0A {
-                if hasBytes {
-                    guard count < WorkspaceTransferLimits.maximumRows else { throw ArchiveValidationError.manifestMismatch }
-                    count += 1
-                }
-                hasBytes = false
-            } else {
-                hasBytes = true
-            }
-        }
-        if hasBytes {
-            guard count < WorkspaceTransferLimits.maximumRows else { throw ArchiveValidationError.manifestMismatch }
-            count += 1
-        }
-        return count
     }
 }

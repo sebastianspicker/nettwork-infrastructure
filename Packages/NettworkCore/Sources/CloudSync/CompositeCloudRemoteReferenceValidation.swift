@@ -15,10 +15,20 @@ extension CompositeCloudRemoteReferenceValidator {
     }
 
     private func effectiveCandidate(_ candidate: [VerifiedCloudRecord], snapshot: CloudRemoteMirrorSnapshot) throws -> CandidateValidationContext {
-        let snapshotActiveTransferIDs = try eligibleActiveTransferIDs(in: snapshot.recordEnvelopesByResourceKey)
+        let envelopes = candidate.map(\.envelope)
+        let preverified = Set(
+            snapshot.recordEnvelopesByResourceKey.values.compactMap { stored -> ObjectID? in
+                guard stored.recordType == CloudRecordNaming.workspaceRecordType, !stored.isDeleted,
+                    let workspace = try? CloudDeterministicCoding.decode(CloudWorkspaceRecord.self, from: stored.payload),
+                    case let .active(commit) = workspace.lifecycle, snapshot.preverifiedActiveTransferIDs.contains(commit.transferID),
+                    !Self.candidate(envelopes, changesActivation: commit, stored: snapshot.recordEnvelopesByResourceKey)
+                else { return nil }
+                return commit.transferID
+            })
+        let snapshotActiveTransferIDs = try eligibleActiveTransferIDs(in: snapshot.recordEnvelopesByResourceKey).union(preverified)
         var combined = snapshot.recordEnvelopesByResourceKey
         for verified in candidate { combined[verified.envelope.resourceKey] = verified.envelope }
-        let activeTransferIDs = try eligibleActiveTransferIDs(in: combined)
+        let activeTransferIDs = try eligibleActiveTransferIDs(in: combined).union(preverified)
         let activatingTransferIDs = activeTransferIDs.subtracting(snapshotActiveTransferIDs)
         let candidateKeys = Set(candidate.map(\.envelope.resourceKey))
         let activated = snapshot.recordEnvelopesByResourceKey.values.filter { envelope in

@@ -71,17 +71,17 @@ extension SwiftDataFeatureReadAdapter {
 
     func readProjection(in namespace: PersistenceNamespace) async throws -> MirrorProjection {
         guard namespace == account.namespace else { throw ProductionAdapterError.namespaceMismatch }
+        let inputs = try await MirrorProjectionInputs(persistence: persistence, namespace: namespace)
+        if let cached = projectionCache.reusable(for: inputs) { return cached }
         let records = try await boundedFeatureRecords(in: namespace)
-        let conflicts = try await persistence.unresolvedCases(in: namespace, limit: 200)
-        let conflictResourceKeys = try await persistence.unresolvedConflictResourceKeys(in: namespace)
-        let conflictCount = try await persistence.unresolvedConflictCount(in: namespace)
-        let syncState = try await persistence.syncState(in: namespace)
         let projection = try MirrorProjection.quarantining(
-            records: records, conflicts: conflicts, conflictResourceKeys: conflictResourceKeys, conflictCount: conflictCount, syncState: syncState
+            records: records, conflicts: inputs.conflicts, conflictResourceKeys: inputs.conflictResourceKeys, conflictCount: inputs.conflictCount,
+            syncState: inputs.syncState
         )
         if projection.quarantinedRecordCount > 0 {
             Self.quarantineLog.warning("Skipped \(projection.quarantinedRecordCount, privacy: .public) unreadable mirror record(s) in a read projection.")
         }
+        projectionCache = CachedMirrorProjection(inputs: inputs, projection: projection)
         return projection
     }
 

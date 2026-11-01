@@ -84,7 +84,7 @@ final class ProductionCSVDirectoryImportSource: CSVImportSource, CSVImportSource
         let urls = try FileManager.default.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey],
-            options: [])
+            options: [.skipsHiddenFiles])  // Finder's .DS_Store and similar are not part of the import
         guard !urls.isEmpty, urls.count <= CSVTable.allCases.count else { throw CSVImportError.importTooLarge }
 
         var filenames = Set<String>()

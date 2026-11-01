@@ -9,7 +9,8 @@ extension ProductionFeatureMutationAuthority {
     public func reserve(
         _ draft: WorkOrderDraft, authorization: OperationsAuthorization, in namespace: PersistenceNamespace
     ) async throws -> WorkOrderReservationPresentation {
-        let trusted = try await sessionAuthorizer.authorizeMutation(namespace: namespace, presentation: authorization)
+        let trusted = try await sessionAuthorizer.authorizeMutation(
+            namespace: namespace, presentation: authorization, requiresAdministrator: draft.operations.contains(where: \.requiresAdministrator))
         let issues = structuralIssues(for: draft) + (try await semanticValidator.issues(for: draft, in: namespace))
         guard issues.isEmpty else { throw ProductionFeatureMutationAuthorityError.invalidDraft(issues) }
         let material = try reservationMaterial(for: draft, trusted: trusted)

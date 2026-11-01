@@ -93,11 +93,14 @@ extension SwiftDataPersistenceStore {
     }
 
     public func workspaceVisibilityState(in namespace: PersistenceNamespace) throws -> LocalWorkspaceVisibilityState {
+        try persistedWorkspaceVisibilityState(in: namespace) ?? LocalWorkspaceVisibilityState(namespace: namespace, lifecycle: .empty(epoch: 0))
+    }
+
+    /// `nil` when no mirror batch has stored a visibility state yet.
+    public func persistedWorkspaceVisibilityState(in namespace: PersistenceNamespace) throws -> LocalWorkspaceVisibilityState? {
         try validateActiveLease(for: namespace)
         let key = PersistenceNamespaceKey.value(for: namespace)
-        guard let model = try workspaceVisibilityStateModel(matching: key) else {
-            return LocalWorkspaceVisibilityState(namespace: namespace, lifecycle: .empty(epoch: 0))
-        }
+        guard let model = try workspaceVisibilityStateModel(matching: key) else { return nil }
         let state = try PersistenceCoding.decode(LocalWorkspaceVisibilityState.self, from: model.stateData)
         guard state.namespace == namespace else { throw PersistenceStoreError.malformedStoredValue("workspace visibility namespace") }
         return state
@@ -117,10 +120,9 @@ extension SwiftDataPersistenceStore {
     public func quarantine(_ record: LocalQuarantineRecord) throws {
         try transaction {
             try validateActiveLease(for: record.namespace)
-            let existing = try quarantineModels(namespaceKey: PersistenceNamespaceKey.value(for: record.namespace))
-                .map { try PersistenceCoding.decode(LocalQuarantineRecord.self, from: $0.recordData) }
-            guard !existing.contains(where: { $0.isSameRejection(as: record) }) else { return }
-            modelContext.insert(try LocalQuarantineModel(record: record))
+            let model = try LocalQuarantineModel(record: record)
+            guard try quarantineModel(matching: model.storageKey) == nil else { return }
+            modelContext.insert(model)
         }
     }
 
@@ -164,7 +166,7 @@ extension SwiftDataPersistenceStore {
             let inventoryProjectionNodes = try inventoryProjectionNodeModels(namespaceKey: key)
             let inventoryProjectionEdges = try inventoryProjectionEdgeModels(namespaceKey: key)
             let inventoryProjectionState = try inventoryProjectionStateModel(matching: key)
-            let operations = try decodedOperations(namespace: namespace)
+            let operations = try unacceptedOperations(namespace: namespace)
             let receipts = try receiptModels(namespaceKey: key)
             let conflicts = try conflictModels(namespaceKey: key)
             let states = try syncStateModels(namespaceKey: key)
@@ -178,7 +180,7 @@ extension SwiftDataPersistenceStore {
             if let visibility { modelContext.delete(visibility) }
             return MirrorRebuildResult(
                 deletedMirrorCount: mirrors.count,
-                preservedOperationIDs: operations.filter { $0.state != .accepted }.map(\.operationID).sorted(),
+                preservedOperationIDs: operations.map(\.operationID).sorted(),
                 preservedReceiptCount: receipts.count, preservedConflictCount: conflicts.count)
         }
     }

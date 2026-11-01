@@ -43,7 +43,9 @@ public enum DefaultTopologyEngine {
         try validateReferences(topology)
         let ports = Dictionary(uniqueKeysWithValues: topology.ports.map { ($0.id, $0) })
         try validateCables(topology.cables, ports: ports)
-        try validateInternalLinks(topology.internalLinks, ports: ports, devices: topology.devices, types: topology.deviceTypes)
+        let devices = Dictionary(uniqueKeysWithValues: topology.devices.map { ($0.id, $0) })
+        let types = Dictionary(uniqueKeysWithValues: topology.deviceTypes.map { ($0.id, $0) })
+        try validateInternalLinks(topology.internalLinks, ports: ports, devices: devices, types: types)
     }
 
     private static func validateReferences(_ topology: PhysicalTopology) throws {
@@ -174,7 +176,9 @@ public enum DefaultTopologyEngine {
         return (a, b)
     }
 
-    private static func validateInternalLinks(_ links: [InternalLink], ports: [ObjectID: Port], devices: [Device], types: [DeviceType]) throws {
+    private static func validateInternalLinks(_ links: [InternalLink], ports: [ObjectID: Port], devices: [ObjectID: Device], types: [ObjectID: DeviceType])
+        throws
+    {
         var usedPorts = Set<ObjectID>()
         for link in links {
             let endpoints = try linkEndpoints(link, ports: ports)
@@ -192,14 +196,14 @@ public enum DefaultTopologyEngine {
         return (a, b)
     }
 
-    private static func validate(link: InternalLink, endpointA: Port, endpointB: Port, devices: [Device], types: [DeviceType]) throws {
+    private static func validate(link: InternalLink, endpointA: Port, endpointB: Port, devices: [ObjectID: Device], types: [ObjectID: DeviceType]) throws {
         guard endpointA.deviceID == endpointB.deviceID,
             endpointA.face != endpointB.face,
             endpointA.medium == endpointB.medium,
             endpointA.connector == endpointB.connector
         else { throw TopologyValidationError.invalidPassThrough(link.id) }
-        guard let device = devices.first(where: { $0.id == endpointA.deviceID }),
-            let type = types.first(where: { $0.id == device.typeID }),
+        guard let device = devices[endpointA.deviceID],
+            let type = types[device.typeID],
             type.kind.permitsPassThrough
         else { throw TopologyValidationError.invalidPassThrough(link.id) }
     }

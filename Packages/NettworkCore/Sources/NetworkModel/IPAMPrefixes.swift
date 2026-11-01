@@ -139,10 +139,16 @@ public struct Prefix: Identifiable, Codable, Hashable, Sendable {
     public func contains(_ range: ReservedAddressRange) -> Bool { contains(range.lowerBound) && contains(range.upperBound) }
     public func isReserved(_ address: IPAddress) -> Bool { reservedRanges.contains { $0.contains(address) } }
     public func utilization(addresses: [IPAddressRecord]) -> PrefixUtilization {
-        let allocated = Set(addresses.lazy.filter { $0.isActive && contains($0.address) && !isReserved($0.address) }.map(\.address)).count
+        let allocated = Set(addresses.lazy.filter { $0.vrfID == vrfID && $0.isActive && contains($0.address) && !isReserved($0.address) }.map(\.address)).count
         let capacity = pow(2, Double(addressCapacityExponent))
+        let hostBits = addressCapacityExponent
         let reserved = mergedReservedRanges().reduce(0.0) { total, range in
-            total + (range.upperBound.ordinal - range.lowerBound.ordinal + 1) / capacity
+            // Ranges lie inside the prefix, so up to 64 host bits the integer difference is exact.
+            let size =
+                hostBits <= 64
+                ? Double(range.upperBound.lowBits(hostBits) - range.lowerBound.lowBits(hostBits)) + 1
+                : range.upperBound.ordinal - range.lowerBound.ordinal + 1
+            return total + size / capacity
         }
         return PrefixUtilization(capacityExponent: addressCapacityExponent, allocatedAddressCount: allocated, reservedFraction: min(1, reserved))
     }

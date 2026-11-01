@@ -12,32 +12,18 @@ extension SwiftDataPersistenceStore {
             guard try outboxModel(matching: key) == nil else {
                 throw PersistenceStoreError.duplicateOperation(operation.operationID)
             }
-            let existing = try decodedOperations(namespace: operation.namespace)
             for dependencyID in operation.dependencyOperationIDs {
-                guard existing.contains(where: { $0.operationID == dependencyID }) else {
+                let dependencyKey = PersistenceNamespaceKey.storageKey(namespace: operation.namespace, identity: "outbox:\(dependencyID.description)")
+                guard let dependency = try outboxModel(matching: dependencyKey), !dependency.operationData.isEmpty else {
                     throw PersistenceStoreError.missingDependency(operation.operationID, dependencyID)
                 }
             }
-            for earlier in existing where earlier.state != .accepted && !earlier.resourceKeys.isDisjoint(with: operation.resourceKeys) {
+            for earlier in try unacceptedOperations(namespace: operation.namespace) where !earlier.resourceKeys.isDisjoint(with: operation.resourceKeys) {
                 guard operation.dependencyOperationIDs.contains(earlier.operationID) else {
                     throw PersistenceStoreError.missingSharedResourceDependency(operation.operationID, earlier.operationID)
                 }
             }
             modelContext.insert(try OutboxMutationModel(operation: operation))
-        }
-    }
-
-    public func operationsReady(at date: Date, in namespace: PersistenceNamespace) async throws -> [OutboxOperation] {
-        try validateActiveLease(for: namespace)
-        let operations = try decodedOperations(namespace: namespace)
-        let accepted = Set(operations.filter { $0.state == .accepted && $0.receipt != nil }.map(\.operationID))
-        return operations.filter { operation in
-            guard operation.state == .pending || operation.state == .retryScheduled else { return false }
-            guard operation.nextRetryAt.map({ $0 <= date }) ?? true else { return false }
-            return operation.dependencyOperationIDs.isSubset(of: accepted)
-        }.sorted { lhs, rhs in
-            if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
-            return lhs.operationID < rhs.operationID
         }
     }
 
@@ -51,7 +37,7 @@ extension SwiftDataPersistenceStore {
 
     public func status(in namespace: PersistenceNamespace) async throws -> OutboxStatus {
         try validateActiveLease(for: namespace)
-        return OutboxStatus.summarize(try decodedOperations(namespace: namespace))
+        return try outboxStatus(namespace: namespace)
     }
 
     /// Retained v1 rows that cannot be executed because their immutable

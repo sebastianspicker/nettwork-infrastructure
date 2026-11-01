@@ -36,6 +36,10 @@ extension AuthoritativeMutationValidator {
         state: AuthoritativeMutationState
     ) throws {
         guard let current = state.currentWorkOrder else {
+            // A new work order uses the current intent encoding (v3 tells nil from "-1").
+            guard mutation.workOrder.intentSchemaVersion == CanonicalWorkIntent.schemaVersion else {
+                throw AuthoritativeMutationValidationError.invalidWorkOrderTransition
+            }
             guard mutation.workOrder.revision == mutation.expectedWorkOrderRevision else {
                 throw AuthoritativeMutationValidationError.invalidSubmittedWorkOrderRevision(
                     expected: mutation.expectedWorkOrderRevision, actual: mutation.workOrder.revision)
@@ -66,6 +70,9 @@ extension AuthoritativeMutationValidator {
         submitted: WorkOrder,
         observedAt: Date
     ) throws {
+        guard immutableFieldsMatch(current, submitted) else {
+            throw AuthoritativeMutationValidationError.invalidWorkOrderTransition
+        }
         if current.status == submitted.status {
             guard current.status == .reserved,
                 let acknowledgement = submitted.reservation?.acknowledgedByCloudKit,
@@ -82,6 +89,22 @@ extension AuthoritativeMutationValidator {
         } catch {
             throw AuthoritativeMutationValidationError.invalidWorkOrderTransition
         }
+    }
+
+    /// No legitimate transition rewrites identity, intent or the reservation's identity and resource set once the order has left draft.
+    /// Title, ticket, notes, evidence and the approval, execution and cancellation fields are left free on purpose.
+    private static func immutableFieldsMatch(_ current: WorkOrder, _ submitted: WorkOrder) -> Bool {
+        guard current.id == submitted.id else { return false }
+        guard current.status != .draft else { return submitted.intentSchemaVersion == CanonicalWorkIntent.schemaVersion }
+        return current.kind == submitted.kind && current.creatorID == submitted.creatorID
+            && current.plannedOperations == submitted.plannedOperations && current.intentDigest == submitted.intentDigest
+            && current.intentSchemaVersion == submitted.intentSchemaVersion
+            && reservationIdentityMatches(current.reservation, submitted.reservation)
+    }
+
+    private static func reservationIdentityMatches(_ current: WorkOrderReservation?, _ submitted: WorkOrderReservation?) -> Bool {
+        guard let current else { return true }
+        return current.id == submitted?.id && current.ownerID == submitted?.ownerID && current.resourceKeys == submitted?.resourceKeys
     }
 
     static func validateReservationAuthority(

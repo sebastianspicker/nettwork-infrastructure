@@ -25,7 +25,6 @@ extension ProductionFloorPlanAssetAtomicBinding {
             descriptor.namespace == AttachmentNamespace(account: account),
             descriptor.purpose == .floorPlan,
             descriptor.contentType == .jpeg,
-            descriptor.id == request.descriptor.id,
             descriptor.byteCount > 0
         else {
             throw ProductionFloorPlanAssetAuthorityError.invalidDescriptor

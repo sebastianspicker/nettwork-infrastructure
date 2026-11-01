@@ -3,7 +3,7 @@ import Foundation
 extension IPAMValidationError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .invalidPrefix, .duplicatePrefix, .partialPrefixOverlap, .crossVRFPrefixMutation:
+        case .invalidPrefix, .duplicatePrefix, .crossVRFPrefixMutation:
             "The address range is invalid or overlaps another range. Enter a range that does not overlap existing ones."
         case .invalidReservedRange, .overlappingReservedRange, .addressReserved:
             "The reserved address range is invalid or already in use. Choose a different range or address."

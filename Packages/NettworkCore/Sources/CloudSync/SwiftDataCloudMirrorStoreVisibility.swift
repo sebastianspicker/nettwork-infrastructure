@@ -9,9 +9,56 @@ extension SwiftDataCloudMirrorStore {
         return transferID
     }
 
-    /// The ordinary lifecycle path reads the one deterministic workspace row,
-    /// one exact session, and at most 200 indexed member digests. It is the
-    /// ordinary apply lifecycle derivation.
+    /// Reuses the persisted state unless the batch can change a derivation
+    /// input: the workspace sentinel, a transfer session, or a staged record
+    /// (before or after this batch). A verified activation is settled: member
+    /// edits after it are ordinary changes, and only a sentinel rewritten away
+    /// from that exact commit is derived again. Without a persisted state it derives.
+    func workspaceVisibility(
+        applying records: [LocalMirrorRecord], replacing stored: [LocalMirrorRecord],
+        maintenance: LocalMirrorMaintenanceBatch, namespace: PersistenceNamespace
+    ) async throws -> LocalWorkspaceVisibilityState {
+        if let persisted = try await persistence.persistedWorkspaceVisibilityState(in: namespace) {
+            if case let .active(commit) = persisted.lifecycle {
+                let before = Dictionary(stored.map { ($0.resourceKey, $0) }, uniquingKeysWith: { first, _ in first })
+                if !records.contains(where: { changesActivation($0, from: commit, replacing: before[$0.resourceKey], namespace: namespace) }) {
+                    return persisted
+                }
+            }
+            if !(records + stored).contains(where: { affectsWorkspaceVisibility($0, namespace: namespace) }) { return persisted }
+        }
+        return try await deriveWorkspaceVisibilityIndexed(applying: records, maintenance: maintenance, namespace: namespace)
+    }
+
+    private func changesActivation(
+        _ record: LocalMirrorRecord, from commit: WorkspaceActivationCommit, replacing old: LocalMirrorRecord?, namespace: PersistenceNamespace
+    ) -> Bool {
+        if record.visibility == .staged(transferID: commit.transferID) {
+            guard let old else { return true }
+            return Self.memberDigest(old) != Self.memberDigest(record)
+        }
+        guard record.resourceKey == AuthoritativeActivationMutation.bootstrapSentinelResourceKey(for: namespace.workspaceID) else { return false }
+        guard !record.isTombstone, let payload = record.payload,
+            let workspace = try? CloudDeterministicCoding.decode(CloudWorkspaceRecord.self, from: payload),
+            case let .active(current) = workspace.lifecycle
+        else { return true }
+        return current != commit
+    }
+
+    private static func memberDigest(_ record: LocalMirrorRecord) -> String {
+        CloudStagedTransferCommitment.member(
+            recordType: record.recordType, resourceKey: record.resourceKey, schemaVersion: record.schemaVersion, payload: record.payload ?? Data(),
+            isDeleted: record.isTombstone, visibility: record.visibility, assetMetadata: record.recordAssetMetadata)
+    }
+
+    private func affectsWorkspaceVisibility(_ record: LocalMirrorRecord, namespace: PersistenceNamespace) -> Bool {
+        if case let .string(value) = record.resourceKey, value.hasPrefix("workspace-transfer-session:") { return true }
+        return record.resourceKey == AuthoritativeActivationMutation.bootstrapSentinelResourceKey(for: namespace.workspaceID)
+            || record.recordType == CloudStagedTransferRecordType.session || stagedTransferID(record.visibility) != nil
+    }
+
+    /// The lifecycle derivation reads the one deterministic workspace row,
+    /// one exact session, and the indexed member digests of the active transfer.
     func deriveWorkspaceVisibilityIndexed(
         applying records: [LocalMirrorRecord],
         maintenance: LocalMirrorMaintenanceBatch, namespace: PersistenceNamespace
@@ -24,7 +71,7 @@ extension SwiftDataCloudMirrorStore {
             return LocalWorkspaceVisibilityState(namespace: namespace, lifecycle: .empty(epoch: 0))
         }
         let members = try await transferMemberDigests(commit.transferID, applying: records, maintenance: maintenance, namespace: namespace)
-        guard members.count == commit.memberCount, members.count <= LocalMirrorMaintenanceLimits.maximumTransferMembers,
+        guard members.count == commit.memberCount, members.count <= LocalMirrorMaintenanceLimits.maximumTransferMembersTotal,
             rollingDigest(
                 members,
                 session: session) == commit.rollingDigest
@@ -57,7 +104,7 @@ extension SwiftDataCloudMirrorStore {
             && session.expectedMemberCount == commit.memberCount
             && session.rollingDigest == commit.rollingDigest
             && session.expectedRollingDigest == commit.rollingDigest
-            && session.cursor <= LocalMirrorMaintenanceLimits.maximumTransferMembers
+            && session.cursor <= LocalMirrorMaintenanceLimits.maximumTransferMembersTotal
     }
 
     private func transferMemberDigests(

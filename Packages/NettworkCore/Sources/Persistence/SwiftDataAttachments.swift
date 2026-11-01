@@ -133,6 +133,25 @@ extension SwiftDataPersistenceStore {
         {
             throw PersistenceStoreError.missingAttachment(id)
         }
+        return try await readAttachmentFile(id: id, namespace: namespace)
+    }
+
+    /// Reads an attachment through the mirror record that references it, so the
+    /// caller does not pay for a decode of the whole mirror to prove visibility.
+    public func data(for id: ObjectID, referencedBy record: LocalMirrorRecord, namespace: PersistenceNamespace) async throws -> Data {
+        try validateActiveLease(for: namespace)
+        // The record must be the stored row, not a caller-built one, before it can prove visibility.
+        guard record.namespace == namespace, record.recordAssetMetadata?.id == id, !record.isTombstone,
+            let stored = try storedLocalMirror(for: record.resourceKey, in: namespace), stored.visibility == record.visibility,
+            stored.isTombstone == record.isTombstone, stored.recordAssetMetadata == record.recordAssetMetadata,
+            try isVisibleToFeatureProjection(record, in: namespace)
+        else {
+            throw PersistenceStoreError.missingAttachment(id)
+        }
+        return try await readAttachmentFile(id: id, namespace: namespace)
+    }
+
+    private func readAttachmentFile(id: ObjectID, namespace: PersistenceNamespace) async throws -> Data {
         let key = PersistenceNamespaceKey.storageKey(namespace: namespace, identity: "attachment:\(id.description)")
         guard let model = try attachmentModel(matching: key) else { throw PersistenceStoreError.missingAttachment(id) }
         let data = try await attachmentFiles.read(relativePath: model.relativePath, id: id, expectedByteCount: model.byteCount)

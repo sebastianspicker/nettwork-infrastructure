@@ -262,6 +262,11 @@ extension SwiftDataPersistenceStore {
         }
     }
 
+    func quarantineModel(matching storageKey: String) throws -> LocalQuarantineModel? {
+        let descriptor = FetchDescriptor<LocalQuarantineModel>(predicate: #Predicate { $0.storageKey == storageKey })
+        return try modelContext.fetch(descriptor).first
+    }
+
     func quarantineModels(namespaceKey: String) throws -> [LocalQuarantineModel] {
         let descriptor = FetchDescriptor<LocalQuarantineModel>(predicate: #Predicate { $0.namespaceKey == namespaceKey })
         return try modelContext.fetch(descriptor)

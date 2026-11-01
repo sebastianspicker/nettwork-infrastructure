@@ -215,7 +215,6 @@ public enum IPAMAddressLifecycle {
 public enum IPAMValidationError: Error, Hashable, Sendable {
     case invalidPrefix(ObjectID)
     case duplicatePrefix(Prefix, Prefix)
-    case partialPrefixOverlap(Prefix, Prefix)
     case invalidReservedRange(prefixID: ObjectID)
     case overlappingReservedRange(prefixID: ObjectID)
     case invalidVLAN(ObjectID)

@@ -120,7 +120,11 @@ extension SwiftDataPersistenceStore {
     }
 
     func decodedOperations(namespace: PersistenceNamespace) throws -> [OutboxOperation] {
-        try outboxModels(namespaceKey: PersistenceNamespaceKey.value(for: namespace)).compactMap { model in
+        try decodedOperations(from: outboxModels(namespaceKey: PersistenceNamespaceKey.value(for: namespace)), namespace: namespace)
+    }
+
+    func decodedOperations(from models: [OutboxMutationModel], namespace: PersistenceNamespace) throws -> [OutboxOperation] {
+        try models.compactMap { model in
             guard !model.operationData.isEmpty else { return nil }
             let operation = try PersistenceCoding.decode(OutboxOperation.self, from: model.operationData)
             guard operation.namespace == namespace else { throw PersistenceStoreError.malformedStoredValue("outbox namespace") }

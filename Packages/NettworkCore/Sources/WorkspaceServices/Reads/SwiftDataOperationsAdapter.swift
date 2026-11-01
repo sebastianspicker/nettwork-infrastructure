@@ -6,6 +6,7 @@ import Foundation
 import ImportExport
 import NetworkModel
 import Persistence
+import Synchronization
 import WorkspaceChangeControl
 
 public final class SwiftDataOperationsAdapter: OperationsFeatureService, OperationsReadModel, ReconciliationFeatureService {
@@ -18,6 +19,8 @@ public final class SwiftDataOperationsAdapter: OperationsFeatureService, Operati
     private let telemetryExternalSignalProvider: any PrivacySafeSyncTelemetryExternalSignalProviding
     private let operationBoundary: ProductionOperationBoundary
     private let recordLimitPerType: Int
+    /// Concurrent `reports()`/`auditEvents` calls may overlap, so the cache sits behind a lock.
+    private let projectionCache = Mutex<CachedMirrorProjection?>(nil)
 
     public init(
         account: AccountContext, persistence: SwiftDataPersistenceStore, reader: any ScopedMirrorRecordEnumerating,
@@ -125,16 +128,10 @@ public final class SwiftDataOperationsAdapter: OperationsFeatureService, Operati
 
     public func auditEvents(matching query: String) async throws -> [AuditEventPresentation] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase
-        let events = try await records()
-        return try events.decoded(
-            AuditEvent.self,
-            recordType: CloudRecordNaming.auditRecordType,
-            expectedResourceKey: { .object($0.id) }
-        )
-        .filter { event in needle.isEmpty || Self.auditSummary(event).localizedLowercase.contains(needle) }
-        .sorted { $0.occurredAt > $1.occurredAt }
-        .prefix(200)
-        .map { AuditEventPresentation(event: $0, summary: Self.auditSummary($0)) }
+        return try await reader.newestAudits(in: account.namespace)
+            .filter { event in needle.isEmpty || Self.auditSummary(event).localizedLowercase.contains(needle) }
+            .prefix(200)
+            .map { AuditEventPresentation(event: $0, summary: Self.auditSummary($0)) }
     }
 
     public func reports() async throws -> [OperationsReport] {
@@ -145,6 +142,7 @@ public final class SwiftDataOperationsAdapter: OperationsFeatureService, Operati
 
     private func generateReports() async throws -> [OperationsReport] {
         let projection = try await featureProjection()
+        let audits = try await reader.newestAudits(in: account.namespace)
         let externalSignals = await telemetryExternalSignalProvider.currentSignals()
         let now = Date.now
         let portStates = Dictionary(grouping: projection.topology.ports) { projection.portState(for: $0.id) }.mapValues(\.count)
@@ -164,7 +162,6 @@ public final class SwiftDataOperationsAdapter: OperationsFeatureService, Operati
         let activeVLANs = projection.vlans.filter(\.isActive)
         let activeAssignments = projection.assignments.filter(\.isActive)
         let activeMemberships = projection.memberships.filter(\.isActive)
-        let acceptedAudits = projection.audits.filter { $0.result == .accepted }.count
         let conflictSummary = "\(projection.conflictCount)"
         let lastContact =
             projection.syncState?.lastSuccessfulServerContact.map {
@@ -200,7 +197,7 @@ public final class SwiftDataOperationsAdapter: OperationsFeatureService, Operati
             contentsOf: Self.operationalHealthReports(
                 projection: projection, externalSignals: externalSignals, averagePrefixUse: averagePrefixUse,
                 activeVLANs: activeVLANs, activeAssignments: activeAssignments, activeMemberships: activeMemberships,
-                acceptedAudits: acceptedAudits, lastContact: lastContact, generatedAt: now))
+                audits: audits, lastContact: lastContact, generatedAt: now))
         return reports
     }
 
@@ -211,7 +208,7 @@ public final class SwiftDataOperationsAdapter: OperationsFeatureService, Operati
         activeVLANs: [VLAN],
         activeAssignments: [IPAddressAssignment],
         activeMemberships: [InterfaceVLANMembership],
-        acceptedAudits: Int,
+        audits: [AuditEvent],
         lastContact: String,
         generatedAt: Date
     ) -> [OperationsReport] {
@@ -232,7 +229,7 @@ public final class SwiftDataOperationsAdapter: OperationsFeatureService, Operati
                 isFinal: false),
             OperationsReport(
                 id: "audit", title: "Immutable audit", generatedAt: generatedAt,
-                summary: "\(projection.audits.count) immutable event(s), \(acceptedAudits) accepted.", isFinal: false),
+                summary: "Latest \(audits.count) immutable event(s), \(audits.filter { $0.result == .accepted }.count) accepted.", isFinal: false),
         ]
     }
 
@@ -305,25 +302,16 @@ public final class SwiftDataOperationsAdapter: OperationsFeatureService, Operati
         try await createCorrectiveWorkOrder(for: reconciliationID, authorization: authorization)
     }
 
-    private func records() async throws -> [LocalMirrorRecord] {
-        try await reader.records(
-            in: account.namespace,
-            recordTypes: [
-                CloudRecordNaming.workOrderRecordType, LocalRecordKind.workOrder,
-                CloudRecordNaming.auditRecordType, LocalRecordKind.auditEvent,
-            ], limitPerType: recordLimitPerType
-        )
-    }
-
     private func featureProjection() async throws -> MirrorProjection {
+        let inputs = try await MirrorProjectionInputs(persistence: persistence, namespace: account.namespace)
+        if let cached = projectionCache.withLock({ $0 }).reusable(for: inputs) { return cached }
         let records = try await reader.records(in: account.namespace, recordTypes: MirrorProjection.featureRecordTypes, limitPerType: recordLimitPerType)
-        let conflicts = try await persistence.unresolvedCases(in: account.namespace, limit: 200)
-        let conflictResourceKeys = try await persistence.unresolvedConflictResourceKeys(in: account.namespace)
-        let conflictCount = try await persistence.unresolvedConflictCount(in: account.namespace)
-        let syncState = try await persistence.syncState(in: account.namespace)
-        return try MirrorProjection(
-            records: records, conflicts: conflicts, conflictResourceKeys: conflictResourceKeys, conflictCount: conflictCount, syncState: syncState
+        let projection = try MirrorProjection(
+            records: records, conflicts: inputs.conflicts, conflictResourceKeys: inputs.conflictResourceKeys, conflictCount: inputs.conflictCount,
+            syncState: inputs.syncState
         )
+        projectionCache.withLock { $0 = CachedMirrorProjection(inputs: inputs, projection: projection) }
+        return projection
     }
     private static func auditSummary(_ event: AuditEvent) -> String {
         "\(event.result.rawValue) · \(event.actorID) · \(event.ticket ?? event.workOrderID?.description ?? event.operationID.description)"

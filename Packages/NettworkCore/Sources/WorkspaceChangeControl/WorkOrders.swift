@@ -41,7 +41,8 @@ public enum IntentDigestError: Error, Hashable, Sendable {
 
 /// The one versioned intent representation hashed at reservation and execution.
 public struct CanonicalWorkIntent: Hashable, Sendable {
-    public static let schemaVersion = 2
+    /// Version 3 encodes optional strings with an explicit presence marker, so `nil` no longer collides with "-1".
+    public static let schemaVersion = 3
     public let intentSchemaVersion: Int
     public let workOrderID: ObjectID
     public let kind: WorkOrderKind
@@ -83,8 +84,9 @@ private enum CanonicalWorkIntentEncoder {
         append(intent.workOrderID.description, to: &data)
         append(intent.kind.rawValue, to: &data)
         append(intent.creatorID, to: &data)
-        append(intent.ticket, to: &data)
-        append(intent.notes, to: &data)
+        let version = intent.intentSchemaVersion
+        append(intent.ticket, version: version, to: &data)
+        append(intent.notes, version: version, to: &data)
         append(intent.operations.count, to: &data)
         for operation in intent.operations {
             append(try operationBytes(operation, intentSchemaVersion: intent.intentSchemaVersion), to: &data)
@@ -111,8 +113,9 @@ private enum CanonicalWorkIntentEncoder {
         case .deviceDecommission(let value): return try encodedOperation("device-decommission", value)
         case .ipam(let value): return try ipamBytes(value, intentSchemaVersion: intentSchemaVersion)
         case let .device(key, description): return simpleBytes("device", values: [key.description, description])
-        case let .template(kind, target, source, migrations): return try templateBytes(kind: kind, target: target, source: source, migrations: migrations)
-        case let .moduleTemplate(kind, target, source): return try moduleTemplateBytes(kind: kind, target: target, source: source)
+        case let .template(kind, target, source, migrations):
+            return try templateBytes(kind: kind, target: target, source: source, migrations: migrations, version: intentSchemaVersion)
+        case let .moduleTemplate(kind, target, source): return try moduleTemplateBytes(kind: kind, target: target, source: source, version: intentSchemaVersion)
         case .floorPlan(let value): return try encodedOperation("floor-plan", value)
         case .hierarchy(let value): return try encodedOperation("hierarchy", value)
         }
@@ -124,7 +127,7 @@ private enum CanonicalWorkIntentEncoder {
         switch operation {
         case let .prefixLayout(vrf, revision, current, desired):
             try appendPrefixLayout(vrf: vrf, revision: revision, current: current, desired: desired, schemaVersion: intentSchemaVersion, to: &data)
-        case let .addressAssignment(value): try appendAddressAssignments(value, to: &data)
+        case let .addressAssignment(value): try appendAddressAssignments(value, version: intentSchemaVersion, to: &data)
         case let .vlanMembership(value): try appendVLANMemberships(value, to: &data)
         case let .create(value):
             append("create", to: &data)
@@ -151,13 +154,15 @@ private enum CanonicalWorkIntentEncoder {
         return data
     }
 
-    private static func templateBytes(kind: PlannedTemplateChangeKind, target: DeviceType, source: ObjectID?, migrations: [DeviceTemplateMigrationPlan]) throws
+    private static func templateBytes(
+        kind: PlannedTemplateChangeKind, target: DeviceType, source: ObjectID?, migrations: [DeviceTemplateMigrationPlan], version: Int
+    ) throws
         -> Data
     {
         var data = Data()
         append("template", to: &data)
         append(kind.rawValue, to: &data)
-        append(source?.description, to: &data)
+        append(source?.description, version: version, to: &data)
         append(try CanonicalJSONCoding.encode(target), to: &data)
         let ordered = migrations.sorted { $0.deviceID < $1.deviceID }
         append(ordered.count, to: &data)
@@ -165,11 +170,11 @@ private enum CanonicalWorkIntentEncoder {
         return data
     }
 
-    private static func moduleTemplateBytes(kind: PlannedTemplateChangeKind, target: ModuleTemplate, source: ObjectID?) throws -> Data {
+    private static func moduleTemplateBytes(kind: PlannedTemplateChangeKind, target: ModuleTemplate, source: ObjectID?, version: Int) throws -> Data {
         var data = Data()
         append("module-template", to: &data)
         append(kind.rawValue, to: &data)
-        append(source?.description, to: &data)
+        append(source?.description, version: version, to: &data)
         append(try CanonicalJSONCoding.encode(target), to: &data)
         return data
     }
@@ -189,10 +194,10 @@ private enum CanonicalWorkIntentEncoder {
         for prefix in ordered { append(try CanonicalJSONCoding.encode(prefix), to: &data) }
     }
 
-    private static func appendAddressAssignments(_ value: InterfaceAddressAssignmentSet, to data: inout Data) throws {
+    private static func appendAddressAssignments(_ value: InterfaceAddressAssignmentSet, version: Int, to data: inout Data) throws {
         append("address-assignment", to: &data)
         append(value.interfaceID.description, to: &data)
-        append(value.primaryAddressID, to: &data)
+        append(value.primaryAddressID, version: version, to: &data)
         try appendEncoded(value.currentAssignments.sorted(by: IPAMRelationshipSetOrdering.assignments), to: &data)
         try appendEncoded(value.desiredAssignments.sorted(by: IPAMRelationshipSetOrdering.assignments), to: &data)
     }
@@ -224,11 +229,17 @@ private enum CanonicalWorkIntentEncoder {
         for value in values { append(try CanonicalJSONCoding.encode(value), to: &data) }
     }
 
-    private static func append(_ value: String?, to data: inout Data) {
+    /// Versions before 3 encode `nil` as the string "-1"; they stay byte-for-byte stable so stored digests verify.
+    private static func append(_ value: String?, version: Int, to data: inout Data) {
+        if version >= 3 { append(value == nil ? 0 : 1, to: &data) }
         guard let value else {
-            append(-1, to: &data)
+            if version < 3 { append(-1, to: &data) }
             return
         }
+        append(Data(value.utf8), to: &data)
+    }
+
+    private static func append(_ value: String, to data: inout Data) {
         append(Data(value.utf8), to: &data)
     }
 

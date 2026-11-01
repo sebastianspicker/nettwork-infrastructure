@@ -9,28 +9,31 @@ public actor SwiftDataCloudMirrorStore: CloudMirrorStore {
     let snapshotProvider: any CloudRemoteSnapshotProvider
     let referenceValidator: any CloudRemoteReferenceValidator
     let stagedAssetQuota: CloudStagedAssetQuotaPolicy
+    let now: @Sendable () -> Date
     var activeLease: PersistenceNamespaceLease?
 
     public init(
         persistence: SwiftDataPersistenceStore, semanticValidator: any CloudRemoteSemanticValidator, snapshotProvider: any CloudRemoteSnapshotProvider,
         referenceValidator: any CloudRemoteReferenceValidator,
-        stagedAssetQuota: CloudStagedAssetQuotaPolicy
+        stagedAssetQuota: CloudStagedAssetQuotaPolicy, now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.persistence = persistence
         self.semanticValidator = semanticValidator
         self.snapshotProvider = snapshotProvider
         self.referenceValidator = referenceValidator
         self.stagedAssetQuota = stagedAssetQuota
+        self.now = now
     }
 
     /// Fail-closed production composition with structural decoding, a complete
     /// persisted reference index, and candidate-state invariant validation.
     public init(
         productionPersistence persistence: SwiftDataPersistenceStore,
-        stagedAssetQuota: CloudStagedAssetQuotaPolicy
+        stagedAssetQuota: CloudStagedAssetQuotaPolicy, now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.persistence = persistence
         self.stagedAssetQuota = stagedAssetQuota
+        self.now = now
         semanticValidator = CodableCloudRemoteSemanticValidator()
         snapshotProvider = SwiftDataCloudRemoteSnapshotProvider(persistence: persistence)
         referenceValidator = CompositeCloudRemoteReferenceValidator()

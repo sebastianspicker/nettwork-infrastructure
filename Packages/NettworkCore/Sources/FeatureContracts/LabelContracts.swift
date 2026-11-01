@@ -42,8 +42,7 @@ public enum PrivacySafeLabelValidator {
     public static let maximumCheckTextLength = 16
 
     public static func validate(_ label: PrivacySafeLabel) throws {
-        guard label.opaqueRoute == ObjectLink.url(for: label.objectID),
-            isSafeToken(label.assetCode.value, maximumLength: maximumAssetCodeLength),
+        guard isSafeToken(label.assetCode.value, maximumLength: maximumAssetCodeLength),
             label.assetCode == AssetCode(label.assetCode.value),
             isSafeToken(label.checkText, maximumLength: maximumCheckTextLength)
         else {

@@ -7,12 +7,15 @@ import WorkspaceChangeControl
 extension IPAMWorkspaceModel {
     @discardableResult
     func stage(_ request: IPAMWorkOrderRequest) async -> Bool {
+        guard !isStaging else { return false }
         guard !request.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             !request.ticketID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else {
             state = .unavailable("A work-order title and ticket are required before staging an IPAM request.")
             return false
         }
+        isStaging = true
+        defer { isStaging = false }
         do {
             let id = try await drafts.stage(request, in: account.namespace)
             stagedWorkOrderID = id

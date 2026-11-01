@@ -14,17 +14,18 @@
         }
 
         func conditionalResult(
-            for error: Error, mutation: AtomicCloudMutation
+            for rawError: Error, mutation: AtomicCloudMutation
         ) -> CloudConditionalBatchResult {
+            let error = Self.primaryError(rawError)
             let resourceKeys = Set(mutation.records.map(\.resourceKey))
-            if isServerRecordChanged(error) { return .conflict }
-            if isIndeterminateNetworkError(error) {
-                return .indeterminate(failure(for: error, resourceKeys: resourceKeys))
+            if Self.isServerRecordChanged(error) { return .conflict }
+            if Self.isIndeterminateNetworkError(error) {
+                return .indeterminate(Self.failure(for: error, resourceKeys: resourceKeys))
             }
             if let adapterError = error as? CloudKitAdapterError {
                 return .permanent(SyncFailure(category: .validation, message: String(describing: adapterError), resourceKeys: resourceKeys))
             }
-            return conditionalTerminalResult(for: failure(for: error, resourceKeys: resourceKeys))
+            return conditionalTerminalResult(for: Self.failure(for: error, resourceKeys: resourceKeys))
         }
 
         private func conditionalTerminalResult(for failure: SyncFailure) -> CloudConditionalBatchResult {
@@ -62,12 +63,13 @@
                 in: CloudKitProductionBoundary.database(in: container, account: account))
         }
 
-        func stagedTransferGCResult(for error: Error) -> CloudStagedTransferGCResult {
-            if isServerRecordChanged(error) { return .conflict }
-            if isIndeterminateNetworkError(error) {
-                return .indeterminate(failure(for: error, resourceKeys: []))
+        func stagedTransferGCResult(for rawError: Error) -> CloudStagedTransferGCResult {
+            let error = Self.primaryError(rawError)
+            if Self.isServerRecordChanged(error) { return .conflict }
+            if Self.isIndeterminateNetworkError(error) {
+                return .indeterminate(Self.failure(for: error, resourceKeys: []))
             }
-            return stagedTransferGCTerminalResult(for: failure(for: error, resourceKeys: []))
+            return stagedTransferGCTerminalResult(for: Self.failure(for: error, resourceKeys: []))
         }
 
         private func stagedTransferGCTerminalResult(for failure: SyncFailure) -> CloudStagedTransferGCResult {
@@ -75,18 +77,6 @@
             case .network, .rateLimited, .quotaExceeded, .accountUnavailable: return .retryable(failure)
             case .permissionDenied, .validation, .conflict, .malformedRemoteRecord, .security, .unknown:
                 return .permanent(failure)
-            }
-        }
-
-        private func isServerRecordChanged(_ error: Error) -> Bool {
-            (error as? CKError)?.code == .serverRecordChanged
-        }
-
-        private func isIndeterminateNetworkError(_ error: Error) -> Bool {
-            guard let cloudError = error as? CKError else { return false }
-            switch cloudError.code {
-            case .networkUnavailable, .networkFailure, .serviceUnavailable: return true
-            default: return false
             }
         }
 
@@ -281,25 +271,6 @@
                 })
             try CloudKitDeletionPreconditionValidator.validate(
                 fetched, expectedChangeTags: expectedTags)
-        }
-
-        func failure(for error: Error, resourceKeys: Set<ResourceKey>) -> SyncFailure {
-            guard let cloudError = error as? CKError else {
-                return SyncFailure(category: .unknown, message: String(describing: error), resourceKeys: resourceKeys)
-            }
-            switch cloudError.code {
-            case .networkUnavailable, .networkFailure, .serviceUnavailable:
-                return SyncFailure(category: .network, message: cloudError.localizedDescription, resourceKeys: resourceKeys)
-            case .requestRateLimited:
-                return SyncFailure(
-                    category: .rateLimited, message: cloudError.localizedDescription,
-                    retryAfter: cloudError.retryAfterSeconds.map { Date.now.addingTimeInterval($0) }, resourceKeys: resourceKeys)
-            case .quotaExceeded: return SyncFailure(category: .quotaExceeded, message: cloudError.localizedDescription, resourceKeys: resourceKeys)
-            case .notAuthenticated: return SyncFailure(category: .accountUnavailable, message: cloudError.localizedDescription, resourceKeys: resourceKeys)
-            case .permissionFailure: return SyncFailure(category: .permissionDenied, message: cloudError.localizedDescription, resourceKeys: resourceKeys)
-            case .serverRecordChanged: return SyncFailure(category: .conflict, message: cloudError.localizedDescription, resourceKeys: resourceKeys)
-            default: return SyncFailure(category: .unknown, message: cloudError.localizedDescription, resourceKeys: resourceKeys)
-            }
         }
 
         func reconciliationCase(for mutation: AtomicCloudMutation, cloudError: CKError) -> ReconciliationCase {

@@ -15,6 +15,7 @@ extension ProductionRuntimeAssembly {
         systemPlatformCapabilities: OrganizationInput.PlatformCapabilities
     ) async throws -> ProductionRuntimeAssembly {
         try validate(input)
+        sweepStaleStaging(input)
         let foundation = try await makeRuntimeFoundation(input)
         do {
             let cloud = try await makeRuntimeCloudGraph(input, foundation: foundation)

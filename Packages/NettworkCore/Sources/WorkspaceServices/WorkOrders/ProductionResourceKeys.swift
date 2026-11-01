@@ -38,7 +38,7 @@ extension WorkOrder {
     }
 }
 
-private enum ProductionResourceKeyProjection {
+enum ProductionResourceKeyProjection {
     static func topology(_ command: TopologyCommand) -> Set<ResourceKey> {
         switch command {
         case .connect(let value):
@@ -90,7 +90,7 @@ private enum ProductionResourceKeyProjection {
         return keys
     }
 
-    private static func addressAssignments(_ value: InterfaceAddressAssignmentSet) -> Set<ResourceKey> {
+    static func addressAssignments(_ value: InterfaceAddressAssignmentSet) -> Set<ResourceKey> {
         var keys: Set<ResourceKey> = [.object(value.revisionVRF.id), .object(value.interfaceID)]
         for assignment in value.currentAssignments + value.desiredAssignments {
             keys.formUnion([.object(assignment.id), .string(assignment.addressID), .object(assignment.interfaceID)])
@@ -98,7 +98,7 @@ private enum ProductionResourceKeyProjection {
         return keys
     }
 
-    private static func vlanMemberships(_ value: InterfaceVLANMembershipSet) -> Set<ResourceKey> {
+    static func vlanMemberships(_ value: InterfaceVLANMembershipSet) -> Set<ResourceKey> {
         var keys: Set<ResourceKey> = [.object(value.revisionVRF.id), .object(value.interfaceID)]
         for membership in value.currentMemberships + value.desiredMemberships {
             keys.formUnion([.object(membership.id), .object(membership.interfaceID), .object(membership.vlanID)])

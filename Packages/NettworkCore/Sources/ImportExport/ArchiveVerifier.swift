@@ -18,7 +18,7 @@ public struct ArchiveVerifier: Sendable {
     }
 
     public func verify(source: any ArchiveEntrySource) throws -> VerifiedArchive {
-        let normalizedEntries = try normalize(try source.entries())
+        let normalizedEntries = try ArchiveEntryValidation.normalize(try source.entries()).map { (entry: $0.0, path: $0.1) }
         let streamed = try readPayloads(normalizedEntries, source: source)
         let decoded = try decodeArchive(payloads: streamed.payloads)
         try validateManifest(decoded, digests: streamed.digests)
@@ -36,66 +36,6 @@ public struct ArchiveVerifier: Sendable {
         return VerifiedArchive(
             manifest: decoded.manifest, recordsJSONL: decoded.records,
             auditJSONL: decoded.audit, assets: assetPayloads, rootSHA256: root)
-    }
-
-    private func normalize(
-        _ entries: [ArchiveEntryMetadata]
-    ) throws -> [(entry: ArchiveEntryMetadata, path: String)] {
-        guard entries.count <= ArchiveSafetyLimits.maximumEntries else {
-            throw ArchiveValidationError.archiveTooLarge
-        }
-        var seen = Set<String>()
-        var normalized: [(ArchiveEntryMetadata, String)] = []
-        var declaredTotal = 0
-        for entry in entries {
-            let path = try ArchivePathPolicy.normalized(entry.path)
-            guard seen.insert(ArchivePathPolicy.collisionKey(path)).inserted else {
-                throw ArchiveValidationError.duplicatePath(path)
-            }
-            try validateKind(entry.kind, path: path)
-            try validateSizes(entry, path: path)
-            guard declaredTotal <= ArchiveSafetyLimits.maximumExpandedBytes - entry.uncompressedSize else {
-                throw ArchiveValidationError.archiveTooLarge
-            }
-            declaredTotal += entry.uncompressedSize
-            normalized.append((entry, path))
-        }
-        for required in requiredPaths {
-            guard normalized.contains(where: { $0.1 == required }) else {
-                throw ArchiveValidationError.requiredEntryMissing(required)
-            }
-        }
-        return normalized
-    }
-
-    private func validateKind(_ kind: ArchiveEntryKind, path: String) throws {
-        guard !ArchivePathPolicy.isAllowed(path, kind: kind) else { return }
-        if kind != .regularFile && kind != .directory {
-            throw ArchiveValidationError.forbiddenEntryKind(path)
-        }
-        throw ArchiveValidationError.unknownEntry(path)
-    }
-
-    private func validateSizes(_ entry: ArchiveEntryMetadata, path: String) throws {
-        guard entry.uncompressedSize >= 0 else {
-            throw ArchiveValidationError.invalidEntryMetadata(path)
-        }
-        guard entry.compressedSize >= 0 else {
-            throw ArchiveValidationError.invalidEntryMetadata(path)
-        }
-        guard entry.uncompressedSize <= ArchiveSafetyLimits.maximumEntryBytes else {
-            throw ArchiveValidationError.invalidEntryMetadata(path)
-        }
-        guard entry.uncompressedSize > 0 else { return }
-        guard entry.compressedSize > 0 else {
-            throw ArchiveValidationError.invalidEntryMetadata(path)
-        }
-        guard entry.compressedSize <= Int.max / ArchiveSafetyLimits.maximumExpansionRatio else {
-            throw ArchiveValidationError.invalidEntryMetadata(path)
-        }
-        guard entry.uncompressedSize <= entry.compressedSize * ArchiveSafetyLimits.maximumExpansionRatio else {
-            throw ArchiveValidationError.expansionLimitExceeded
-        }
     }
 
     private func readPayloads(
@@ -152,7 +92,7 @@ public struct ArchiveVerifier: Sendable {
         let recordCount = try ArchiveManifestRecordCounts.total(manifest.recordCounts)
         guard manifest.auditRecordCount >= 0,
             manifest.auditRecordCount <= WorkspaceTransferLimits.maximumRows,
-            try jsonlCount(archive.records) == recordCount,
+            try ArchiveEntryValidation.countJSONL(archive.records) == recordCount,
             verifiedAudit.count == manifest.auditRecordCount,
             verifiedAudit.headSHA256 == manifest.auditHeadSHA256
         else {
@@ -242,40 +182,6 @@ public struct ArchiveVerifier: Sendable {
         }
         guard body.count == entry.uncompressedSize else { throw ArchiveValidationError.sizeMismatch(path) }
         return (body, body.count, HexDigest.string(hasher.finalize()))
-    }
-
-    private func jsonlCount(_ data: Data) throws -> Int {
-        var count = 0
-        var hasRecordBytes = false
-        for byte in data {
-            if byte == 0x0A {
-                if hasRecordBytes {
-                    let (nextCount, overflow) = count.addingReportingOverflow(1)
-                    guard !overflow, nextCount <= WorkspaceTransferLimits.maximumRows else {
-                        throw ArchiveValidationError.manifestMismatch
-                    }
-                    count = nextCount
-                }
-                hasRecordBytes = false
-            } else {
-                hasRecordBytes = true
-            }
-        }
-        if hasRecordBytes {
-            let (nextCount, overflow) = count.addingReportingOverflow(1)
-            guard !overflow, nextCount <= WorkspaceTransferLimits.maximumRows else {
-                throw ArchiveValidationError.manifestMismatch
-            }
-            count = nextCount
-        }
-        return count
-    }
-
-    private var requiredPaths: [String] {
-        [
-            ArchiveLayout.manifestPath, ArchiveLayout.recordsPath, ArchiveLayout.auditPath,
-            ArchiveLayout.completionPath,
-        ]
     }
 
     private struct DecodedArchive {

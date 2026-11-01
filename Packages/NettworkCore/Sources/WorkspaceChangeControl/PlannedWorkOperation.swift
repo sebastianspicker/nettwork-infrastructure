@@ -11,6 +11,14 @@ public enum PlannedWorkOperation: Codable, Hashable, Sendable {
     case floorPlan(PlannedFloorPlanOperation)
     case hierarchy(PlannedHierarchyOperation)
 
+    /// Operations that change the hierarchy or templates are administrator work.
+    public var requiresAdministrator: Bool {
+        switch self {
+        case .hierarchy, .template, .moduleTemplate: true
+        case .topology, .deviceDecommission, .ipam, .device, .floorPlan: false
+        }
+    }
+
     private enum CodingKeys: String, CodingKey {
         case kind, topology, deviceDecommission, ipam, resourceKey, description, templateKind, target, moduleTarget, sourceTemplateID, migrations, floorPlan,
             hierarchy

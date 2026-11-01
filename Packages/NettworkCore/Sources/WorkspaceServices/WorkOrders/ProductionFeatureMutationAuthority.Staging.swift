@@ -9,7 +9,8 @@ extension ProductionFeatureMutationAuthority {
     public func validateDraft(
         _ draft: WorkOrderDraft, authorization: OperationsAuthorization, in namespace: PersistenceNamespace
     ) async throws -> WorkOrderValidation {
-        let trusted = try await sessionAuthorizer.authorizeMutation(namespace: namespace, presentation: authorization)
+        let trusted = try await sessionAuthorizer.authorizeMutation(
+            namespace: namespace, presentation: authorization, requiresAdministrator: draft.operations.contains(where: \.requiresAdministrator))
         var issues = structuralIssues(for: draft)
         if issues.isEmpty {
             issues.append(contentsOf: try await semanticValidator.issues(for: draft, in: namespace))
@@ -35,37 +36,30 @@ extension ProductionFeatureMutationAuthority {
     public func stageTopology(_ request: TopologyWorkOrderRequest, in namespace: PersistenceNamespace) async throws -> ObjectID {
         let kind: WorkOrderKind
         let operation: PlannedWorkOperation
-        let requiresAdministrator: Bool
         switch request.action {
         case .connect(let value):
             operation = .topology(.connect(value))
             kind = .connect
-            requiresAdministrator = false
         case .disconnect(let value):
             operation = .topology(.disconnect(value))
             kind = .disconnect
-            requiresAdministrator = false
         case .move(let value):
             operation = .topology(.move(value))
             kind = .move
-            requiresAdministrator = false
         case .remove:
             throw ProductionFeatureMutationAuthorityError.unsupportedDraft
         case .deviceDecommission(let value):
             operation = .deviceDecommission(value)
             kind = .device
-            requiresAdministrator = false
         case .markUnavailable(let value):
             operation = .topology(.markUnavailable(value))
             kind = .device
-            requiresAdministrator = false
         case .hierarchy(let value):
             operation = .hierarchy(value)
             kind = .hierarchy
-            requiresAdministrator = true
         }
         let trusted = try await sessionAuthorizer.verifiedSession(namespace: namespace)
-        try OfficialClientPolicy.authorizeMutation(actor: trusted.actor, account: trusted.account, requiresAdministrator: requiresAdministrator)
+        try OfficialClientPolicy.authorizeMutation(actor: trusted.actor, account: trusted.account, requiresAdministrator: operation.requiresAdministrator)
         let draft = WorkOrderDraft(
             title: request.title, kind: kind, ticket: request.ticket, notes: request.notes, resourceKeys: request.resourceKeys, operations: [operation]
         )
@@ -84,7 +78,8 @@ extension ProductionFeatureMutationAuthority {
             kind: .device,
             ticket: request.ticketID,
             notes: request.notes,
-            resourceKeys: templateChangeResourceKeys(target: request.targetTemplate, source: components.source, migrations: components.migrations),
+            resourceKeys: ProductionResourceKeyProjection.template(
+                target: request.targetTemplate, sourceTemplateID: components.source, migrations: components.migrations),
             operations: [
                 .template(
                     kind: components.kind, target: request.targetTemplate, sourceTemplateID: components.source, migrations: components.migrations
@@ -104,20 +99,6 @@ extension ProductionFeatureMutationAuthority {
         case .migration(let plans): return (.migration, plans.first?.sourceSnapshot.templateID, plans)
         case .instantiate: throw ProductionFeatureMutationAuthorityError.unsupportedDraft
         }
-    }
-
-    private func templateChangeResourceKeys(target: DeviceType, source: ObjectID?, migrations: [DeviceTemplateMigrationPlan]) -> Set<ResourceKey> {
-        var resources: Set<ResourceKey> = [.object(target.id)]
-        if let source { resources.insert(.object(source)) }
-        for migration in migrations {
-            resources.insert(.object(migration.deviceID))
-            for impact in migration.portImpacts {
-                if let currentPort = impact.currentPort { resources.insert(.object(currentPort.id)) }
-                if let desiredPort = impact.desiredPort { resources.insert(.object(desiredPort.id)) }
-                resources.formUnion(impact.connectedCableIDs.map { .object($0) })
-            }
-        }
-        return resources
     }
 
     private func stageTemplateInstantiation(
@@ -194,12 +175,12 @@ extension ProductionFeatureMutationAuthority {
             guard request.perVRFRevisionKey == .object(assignments.revisionVRF.id), isWellFormed(assignments) else {
                 throw ProductionFeatureMutationAuthorityError.unsupportedDraft
             }
-            return (.addressAssignment(assignments), Set([request.perVRFRevisionKey]).union(resourceKeys(for: assignments)))
+            return (.addressAssignment(assignments), Set([request.perVRFRevisionKey]).union(ProductionResourceKeyProjection.addressAssignments(assignments)))
         case let .vlanMembership(memberships):
             guard request.perVRFRevisionKey == .object(memberships.revisionVRF.id), isWellFormed(memberships) else {
                 throw ProductionFeatureMutationAuthorityError.unsupportedDraft
             }
-            return (.vlanMembership(memberships), Set([request.perVRFRevisionKey]).union(resourceKeys(for: memberships)))
+            return (.vlanMembership(memberships), Set([request.perVRFRevisionKey]).union(ProductionResourceKeyProjection.vlanMemberships(memberships)))
         case .createVRF, .createAddressRecord, .createVLAN:
             return try creationStaging(request)
         }

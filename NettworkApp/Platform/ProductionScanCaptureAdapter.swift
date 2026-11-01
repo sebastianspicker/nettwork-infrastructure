@@ -15,21 +15,32 @@ import WorkspaceChangeControl
 /// A valid code is still only a lookup candidate: its scoped-mirror resolution
 /// and every subsequent write authorization remain outside this adapter.
 struct PlatformScanPayloadGate {
-    private var deliveredIDs = Set<ObjectID>()
+    private var deliveredAt: [ObjectID: Date] = [:]
+    private let redeliveryInterval: TimeInterval
+    private let now: () -> Date
+
+    /// A code is delivered again only after `redeliveryInterval`, so a lookup
+    /// that failed can be retried by re-presenting the code without a flood.
+    init(redeliveryInterval: TimeInterval = 2, now: @escaping () -> Date = Date.init) {
+        self.redeliveryInterval = redeliveryInterval
+        self.now = now
+    }
 
     mutating func accept(_ rawValue: String) -> ObjectID? {
         guard rawValue.utf8.count <= 512,
             rawValue.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }),
-            let objectID = OpaqueScanParser.parse(rawValue)?.objectID,
-            deliveredIDs.insert(objectID).inserted
+            let objectID = OpaqueScanParser.parse(rawValue)?.objectID
         else {
             return nil
         }
+        let current = now()
+        if let last = deliveredAt[objectID], current.timeIntervalSince(last) < redeliveryInterval { return nil }
+        deliveredAt[objectID] = current
         return objectID
     }
 
     mutating func reset() {
-        deliveredIDs.removeAll(keepingCapacity: true)
+        deliveredAt.removeAll(keepingCapacity: true)
     }
 }
 

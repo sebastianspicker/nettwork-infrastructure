@@ -298,7 +298,8 @@ private struct ValidatedLabel {
             }
             let operation = NSPrintOperation(view: view)
             operation.jobTitle = "Nettwork Labels"
-            guard operation.run() else {
+            // `run()` is false for a user cancel and for a failed job alike; only a cancel is not an error.
+            guard operation.run() || operation.printInfo.jobDisposition == .cancel else {
                 throw PlatformLabelPDFError.presentationUnavailable
             }
         }

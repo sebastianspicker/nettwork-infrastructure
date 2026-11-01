@@ -110,11 +110,11 @@ public struct ProductionTransferFeatureService: TransferFeatureService {
         let stagingRoot = archiveVerificationStagingRoot
         return try await operationBoundary.perform(.workspaceImport) {
             try await Self.authorizeArchiveRestorePreflight(authorization, currentAccount: currentAccount)
-            let preview = try await Task.detached(priority: .userInitiated) {
+            let preview = try await Self.runOffActor {
                 try archiveVerifier.verifyFileBackedForRestore(
                     source: source, stagingRoot: stagingRoot,
                     authorization: authorization)
-            }.value
+            }
             do {
                 try await Self.authorizeArchiveRestorePreflight(
                     authorization, currentAccount: currentAccount)
@@ -155,8 +155,17 @@ public struct ProductionTransferFeatureService: TransferFeatureService {
     }
 
     nonisolated private static func decodeRecords(from source: any CSVImportSource) async throws -> [ImportRecord] {
-        return try await Task.detached(priority: .userInitiated) {
-            try CSVImportBatchDecoder.records(source: source)
-        }.value
+        return try await runOffActor { try CSVImportBatchDecoder.records(source: source) }
+    }
+
+    /// A detached task does not inherit the caller's cancellation, so the
+    /// handler forwards it; the blocking work observes it via `Task.isCancelled`.
+    nonisolated static func runOffActor<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+        let task = Task.detached(priority: .userInitiated, operation: work)
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
     }
 }

@@ -10,15 +10,23 @@ public enum TemplateInstantiator {
     ) throws {
         try TemplateCatalog.validate(deviceTemplate: template, moduleTemplates: moduleTemplates)
         try validateDevice(installation.device, against: template)
-        let knownModules = Dictionary(uniqueKeysWithValues: moduleTemplates.map { ($0.id, $0) })
+        let knownModules = try indexedByID(moduleTemplates)
         try validateCatalogSlots(template.moduleSlots, knownModules: knownModules, templateID: template.id)
         let slots = Dictionary(uniqueKeysWithValues: template.moduleSlots.map { ($0.key, $0) })
         try validateModules(installation.modules, deviceID: installation.device.id, slots: slots, templates: knownModules, requiredSlots: template.moduleSlots)
-        let modulesByID = Dictionary(uniqueKeysWithValues: installation.modules.map { ($0.id, $0) })
+        let modulesByID = try indexedByID(installation.modules)
         try validatePortOwners(installation.ports, deviceID: installation.device.id, modules: modulesByID)
         let directTemplates = Dictionary(uniqueKeysWithValues: template.portTemplates.map { ($0.id, $0) })
         try validatePorts(installation.ports.filter { $0.moduleID == nil }, definitions: directTemplates, errorID: installation.device.id)
         try validateModulePorts(installation, templates: knownModules)
+    }
+
+    private static func indexedByID<T: Identifiable>(_ values: [T]) throws -> [ObjectID: T] where T.ID == ObjectID {
+        var indexed: [ObjectID: T] = [:]
+        for value in values {
+            guard indexed.updateValue(value, forKey: value.id) == nil else { throw TemplateValidationError.duplicateInstantiationID(value.id) }
+        }
+        return indexed
     }
 
     private static func validateDevice(_ device: Device, against template: DeviceType) throws {

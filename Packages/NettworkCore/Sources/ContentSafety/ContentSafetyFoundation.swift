@@ -253,35 +253,6 @@ public enum ContentSafetyError: Error, Equatable, Sendable {
     case outputTypeMismatch
     case outputDimensionsExceeded
     case outputSizeExceeded
-    case invalidStateTransition
     case decoderUnavailable
     case decodeFailed
-}
-
-public enum ContentSafetyProcessingState: Hashable, Sendable {
-    case initialized
-    case authorized
-    case sourced
-    case validated
-    case decoded
-    case sanitized
-    case staged
-    case cleanedUp
-}
-
-public enum ContentSafetyStateMachine {
-    public static func transition(
-        from state: ContentSafetyProcessingState,
-        to nextState: ContentSafetyProcessingState
-    ) throws -> ContentSafetyProcessingState {
-        let permitted =
-            switch (state, nextState) {
-            case (.initialized, .authorized), (.authorized, .sourced), (.sourced, .validated),
-                (.validated, .decoded), (.decoded, .sanitized), (.sanitized, .staged), (.staged, .cleanedUp):
-                true
-            default: false
-            }
-        guard permitted else { throw ContentSafetyError.invalidStateTransition }
-        return nextState
-    }
 }

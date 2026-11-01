@@ -10,6 +10,7 @@ final class ReconciliationViewModel {
     private(set) var comparisons: [ReconciliationComparison] = []
     private(set) var createdCorrectiveWorkOrderID: ObjectID?
     private(set) var errorMessage: String?
+    private(set) var isCreating = false
     private let service: any ReconciliationFeatureService
     private let onStagedWorkOrder: @MainActor (ObjectID) async -> Void
 
@@ -29,10 +30,13 @@ final class ReconciliationViewModel {
     }
 
     func createCorrectiveWorkOrder(for comparison: ReconciliationComparison, authorization: OperationsAuthorization) async {
+        guard !isCreating else { return }
         guard authorization.permitsPrivilegedAction else {
             errorMessage = "A fresh technician or administrator authorization is required."
             return
         }
+        isCreating = true
+        defer { isCreating = false }
         do {
             let id = try await service.createCorrectiveWorkOrder(
                 for: comparison.id,
@@ -40,6 +44,7 @@ final class ReconciliationViewModel {
             )
             createdCorrectiveWorkOrderID = id
             await onStagedWorkOrder(id)
+            await refresh()
             errorMessage = nil
         } catch { errorMessage = error.localizedDescription }
     }
@@ -92,7 +97,7 @@ struct ReconciliationScreen: View {
                         Button("Create corrective work order") {
                             Task { await model.createCorrectiveWorkOrder(for: comparison, authorization: authorization) }
                         }
-                        .disabled(!authorization.permitsPrivilegedAction)
+                        .disabled(!authorization.permitsPrivilegedAction || model.isCreating)
                         .accessibilityIdentifier("reconciliation.corrective-work-order.\(comparison.id)")
                     } header: {
                         VStack(alignment: .leading, spacing: 4) {
