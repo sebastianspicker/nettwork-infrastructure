@@ -9,6 +9,8 @@ connects. It brings equipment inventory, cable paths, racks, floor plans, IP
 address management (IPAM), and work orders into a SwiftUI app for iPhone, iPad,
 and Mac.
 
+> _Claude was used to polish and proof-read the code and documentation of this repository._
+
 <details>
 <summary>Status and limitations</summary>
 

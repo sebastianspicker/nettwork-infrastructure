@@ -17,57 +17,92 @@ backend server in this repository. The checked-in build has no
 organization provider and therefore starts unconfigured rather than creating a
 placeholder workspace.
 
+New here? Read this page top to bottom once, then open the files in this
+order: [NettworkApp.swift](../NettworkApp/Composition/NettworkApp.swift)
+(entry point), [ProductionAppLaunch.swift](../NettworkApp/Composition/Runtime/ProductionAppLaunch.swift)
+(startup), [TopologyWorkspaceModel.swift](../NettworkApp/Presentation/Features/Topology/TopologyWorkspaceModel.swift)
+(a typical screen model), [TopologyWorkOrderContracts.swift](../Packages/NettworkCore/Sources/FeatureContracts/TopologyWorkOrderContracts.swift)
+(the port it talks to), and [CloudForegroundSyncCoordinator.swift](../Packages/NettworkCore/Sources/CloudSync/CloudForegroundSyncCoordinator.swift)
+(how data arrives).
+
+What runs where, and what talks to what:
+
 ```mermaid
 flowchart LR
-    Operator[Operator] --> App[Nettwork iOS or macOS app]
-    App --> Platform[Camera, Files, PDF label, printing, and pasteboard adapters]
-    App --> Local[(SwiftData mirror, outbox, and private files)]
-    App --> Cloud[(Organization CloudKit container)]
-    Demo[Static site demo] --> Mock[Bundled mock data]
+    operator((Operator))
+    subgraph device [iPhone, iPad or Mac]
+        app[Nettwork app]
+        platform[Platform adapters]
+        mirror[(SwiftData mirror)]
+        staging[(Private staging dirs)]
+    end
+    subgraph org [Organization iCloud]
+        cloud[(CloudKit container)]
+    end
+    subgraph pages [GitHub Pages]
+        demo[Static demo]
+    end
+    operator -->|taps and edits| app
+    operator -.->|browses sample data| demo
+    app -->|"camera, files, print"| platform
+    app -->|"reads, outbox"| mirror
+    app -->|"attachments, transfers"| staging
+    app -->|"fetch changes, atomic saves"| cloud
 ```
 
-The static demo is a separate artifact. It does not share runtime state or
+Everything native runs in one app process per device; there is no server of
+our own. The app reads only from the local `mirror` and writes authoritative
+changes straight to `cloud` as conditional atomic saves. The `Alpha Local`
+build swaps CloudKit for an on-device record store
+(`LocalWorkspaceRecordTransport`) behind the same transport protocol. The
+static demo is a separate artifact. It does not share runtime state or
 services with the native app.
 
 ## Components and dependency direction
 
 `NettworkCore` contains eight Swift library products. Arrows below point from a
-module to a dependency:
+module to a dependency. Only direct layering is drawn; every module may also
+use anything its dependencies depend on (for example, everything reaches
+`NetworkModel`):
 
 ```mermaid
 flowchart TD
-    WCC[WorkspaceChangeControl] --> Model[NetworkModel]
-    Persistence --> WCC
-    Persistence --> Model
-    CloudSync --> Persistence
-    CloudSync --> WCC
-    CloudSync --> Model
-    ContentSafety --> WCC
-    ContentSafety --> Model
-    ImportExport --> ContentSafety
-    ImportExport --> WCC
-    ImportExport --> Model
-    Contracts[FeatureContracts] --> ImportExport
-    Contracts --> ContentSafety
-    Contracts --> WCC
-    Contracts --> Model
-    Services[WorkspaceServices] --> Contracts
-    Services --> CloudSync
-    Services --> Persistence
-    Services --> ImportExport
-    Services --> ContentSafety
-
-    Presentation[NettworkApp Presentation] --> Model
-    Presentation --> WCC
-    Presentation --> ContentSafety
-    Presentation --> ImportExport
-    Presentation --> Contracts
-    Composition[NettworkApp Composition] --> Presentation
+    subgraph appTarget [NettworkApp target]
+        Composition
+        Presentation
+        AppPlatform[Platform]
+    end
+    subgraph core [NettworkCore package]
+        Services[WorkspaceServices]
+        Contracts[FeatureContracts]
+        CloudSync
+        Persistence
+        ImportExport
+        ContentSafety
+        WCC[WorkspaceChangeControl]
+        Model[NetworkModel]
+    end
+    Composition --> Presentation
+    Composition --> AppPlatform
     Composition --> Services
-    Composition --> AppPlatform[NettworkApp Platform]
+    Presentation --> Contracts
     AppPlatform --> Contracts
-    AppPlatform --> ImportExport
+    Services --> Contracts
+    Services --> CloudSync
+    Contracts --> ImportExport
+    ImportExport --> ContentSafety
+    CloudSync --> Persistence
+    Persistence --> WCC
+    ContentSafety --> WCC
+    WCC --> Model
+    classDef focus fill:#fde68a,stroke:#b45309,color:#1f2937
+    class Contracts focus
 ```
+
+`FeatureContracts` is the seam: screens in `Presentation` and adapters in
+`Platform` see only its protocols, and `WorkspaceServices` implements them on
+top of `CloudSync` and `Persistence`. Only `Composition` knows both sides and
+wires them together.
 
 The exact package graph is declared in `Packages/NettworkCore/Package.swift`
 and enforced by `scripts/check-architecture.sh`. Its import rules match every
@@ -139,9 +174,60 @@ presentation context and supplies system scan and label adapters. An
 organization may replace that complete capability set through its assembly
 input. See [CONFIGURATION.md](CONFIGURATION.md).
 
+Where in the code:
+
+- [NettworkApp.swift](../NettworkApp/Composition/NettworkApp.swift): `@main` scene and scene-phase hooks.
+- [ProductionAppLaunch.swift](../NettworkApp/Composition/Runtime/ProductionAppLaunch.swift): provider lookup and `ProductionAppLaunchController`.
+- [ProductionRuntimeAssembly.swift](../NettworkApp/Composition/Runtime/ProductionRuntimeAssembly.swift) and the `ProductionRuntime*Graph.swift` files beside it: graph assembly.
+- [AppBootstrap.swift](../NettworkApp/Composition/AppBootstrap.swift): `ProductionAppBootstrapService`, activation and first sync.
+
 ## Data flows
 
 ### Foreground synchronization
+
+What happens when the user taps **Sync now** (scene activation takes the same
+path from step 3):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Operator
+    participant shell as AppShell
+    participant deps as AppDependencies
+    participant sync as CloudForegroundSyncCoordinator
+    participant ck as CloudKit
+    participant mirror as SwiftDataCloudMirrorStore
+    U->>shell: Sync now
+    shell->>deps: onSynchronizeRequest
+    deps->>sync: synchronizeForeground()
+    sync->>ck: verify membership
+    sync->>ck: fetchChanges()
+    ck-->>sync: CloudChangeBatch
+    sync->>mirror: validateRemoteReferences
+    alt batch valid
+        sync->>mirror: applyVerifiedBatch (one transaction)
+        sync->>ck: replay outbox
+    else batch rejected
+        sync->>mirror: quarantine records
+    end
+    sync-->>deps: SyncReceipt
+    deps-->>shell: syncStatus
+```
+
+`AppDependencies` drops a request while another sync is running (step 3), and
+`ProductionAppBootstrapService` re-activates the session first if it lapsed.
+Before validating, applying, and replaying, the coordinator checks that the session lease is still
+current, so an account switch mid-sync stops the run instead of writing into
+the wrong workspace. Step 8 is the only place remote records enter the mirror,
+and it is all-or-nothing.
+
+Where in the code: [AppShell.swift](../NettworkApp/Presentation/Shell/AppShell.swift),
+[AppDependencies.swift](../NettworkApp/Composition/AppDependencies.swift),
+[CloudForegroundSyncCoordinator.swift](../Packages/NettworkCore/Sources/CloudSync/CloudForegroundSyncCoordinator.swift),
+[CloudKitRecordTransport.swift](../Packages/NettworkCore/Sources/CloudSync/CloudKitRecordTransport.swift),
+[SwiftDataCloudMirrorStoreApply.swift](../Packages/NettworkCore/Sources/CloudSync/SwiftDataCloudMirrorStoreApply.swift),
+[OutboxRecovery.swift](../Packages/NettworkCore/Sources/CloudSync/OutboxRecovery.swift)
+(`CloudOutboxReplayer`). The same steps in words:
 
 1. Verify the current account, workspace membership, actor, installation
    session, and local namespace lease.
@@ -192,6 +278,54 @@ Presentation submits intent through feature contracts; it never grants
 authority. WorkspaceServices derives current authority from the verified Cloud
 session, actor, installation session, workspace lease, and organization policy,
 then checks any presentation values for an exact match.
+
+What happens when the user connects two ports and carries the change through
+a work order:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Operator
+    participant topo as TopologyWorkspaceModel
+    participant ops as OperationsFeatureViewModel
+    participant auth as ProductionFeatureMutationAuthority
+    participant repo as CloudAuthoritativeMutationRepository
+    participant ck as CloudKit
+    U->>topo: Select two ports, Connect, Stage
+    topo->>auth: stageTopology(request)
+    auth-->>topo: work-order ID (draft only)
+    U->>ops: Reserve
+    ops->>auth: reserve(draft)
+    auth->>repo: commit reservation
+    repo->>ck: saveAtomically
+    ck-->>repo: OperationReceipt
+    auth->>repo: commit acknowledgement
+    U->>ops: Begin execution, then Complete
+    ops->>auth: beginExecution / complete(evidence)
+    auth->>repo: commit transition
+    repo->>ck: saveAtomically
+```
+
+Staging (steps 1–3) only stores a draft in the organization-supplied draft
+store; nothing authoritative changes. The screen models reach `auth` through
+the `FeatureContracts` adapters `AuthorizedWorkOrderDraftAdapter` and
+`SwiftDataOperationsAdapter`; approval and cancellation are left out of the
+diagram. Each later step re-verifies the session
+and goes through `repo`, the single privileged write path: it validates the
+mutation against fresh state, sends one conditional atomic save, and on a
+lost response looks up the deterministic receipt instead of retrying. Other
+devices see the result on their next sync. IPAM and template changes take the
+same route via `stageIPAM` and `stageTemplate`.
+
+Where in the code: [TopologyWorkspaceModel.swift](../NettworkApp/Presentation/Features/Topology/TopologyWorkspaceModel.swift)
+(`prepareConnect`, `stage`),
+[OperationsFeatureViewModel+Lifecycle.swift](../NettworkApp/Presentation/Features/Operations/OperationsFeatureViewModel+Lifecycle.swift),
+[AuthorizedWorkOrderDraftAdapter.swift](../Packages/NettworkCore/Sources/WorkspaceServices/WorkOrders/AuthorizedWorkOrderDraftAdapter.swift),
+[SwiftDataOperationsAdapter.swift](../Packages/NettworkCore/Sources/WorkspaceServices/Reads/SwiftDataOperationsAdapter.swift),
+[ProductionFeatureMutationAuthority.Staging.swift](../Packages/NettworkCore/Sources/WorkspaceServices/WorkOrders/ProductionFeatureMutationAuthority.Staging.swift),
+[ProductionFeatureMutationAuthority.Reservations.swift](../Packages/NettworkCore/Sources/WorkspaceServices/WorkOrders/ProductionFeatureMutationAuthority.Reservations.swift),
+[CloudAuthoritativeMutationRepository.swift](../Packages/NettworkCore/Sources/CloudSync/CloudAuthoritativeMutationRepository.swift),
+[WorkOrderLifecycle.swift](../Packages/NettworkCore/Sources/WorkspaceChangeControl/WorkOrderLifecycle.swift).
 
 Topology and IPAM changes are staged as work-order operations. The production
 authority validates exact current records, reserves affected resources with an
@@ -252,6 +386,42 @@ durable sidecars and are never swept.
 
 Archive checksums establish integrity against accidental change; they do not
 prove authenticity against a malicious archive writer.
+
+## Data model
+
+The core records and how they reference each other (IDs only; templates,
+modules, work orders, and audit records are left out):
+
+```mermaid
+erDiagram
+    Location ||--o{ Location : "parentID"
+    Location ||--o{ Rack : "locationID"
+    Rack ||--o{ Device : "rackID"
+    Device ||--o{ Port : "deviceID"
+    Port ||--o{ Cable : "endpointA / endpointB"
+    Device ||--o{ Interface : "deviceID"
+    Port |o--o{ Interface : "physicalPortID"
+    VRF ||--o{ Prefix : "vrfID"
+    VRF ||--o{ IPAddressRecord : "vrfID"
+    Interface |o--o{ IPAddressRecord : "assignedInterfaceID"
+    VLAN ||--o{ InterfaceVLANMembership : "vlanID"
+    Interface ||--o{ InterfaceVLANMembership : "interfaceID"
+```
+
+`Location` through `Cable` is the physical side (where things are and how
+they are cabled); `VRF`, `Prefix`, addresses, and VLANs are IPAM. `Interface` bridges the two. A `Cable` joins
+exactly two ports, which is what trace walks. Addresses belong to a `VRF`, not
+to a `Prefix`; the containing prefix is computed by the IPAM prefix index. All
+records are plain Codable structs that the mirror and CloudKit store as
+encoded records, so the schema lives in Swift, not in a database definition.
+
+Where in the code: [Topology.swift](../Packages/NettworkCore/Sources/NetworkModel/Topology.swift)
+(`Location`, `Rack`), [TopologyTemplates.swift](../Packages/NettworkCore/Sources/NetworkModel/TopologyTemplates.swift)
+(`Device`), [TopologyConnections.swift](../Packages/NettworkCore/Sources/NetworkModel/TopologyConnections.swift)
+(`Port`, `Cable`), [IPAMPrefixes.swift](../Packages/NettworkCore/Sources/NetworkModel/IPAMPrefixes.swift)
+(`Prefix`, `VRF`), [IPAMRecords.swift](../Packages/NettworkCore/Sources/NetworkModel/IPAMRecords.swift)
+(addresses, VLANs, interfaces), [WorkspaceRecordType.swift](../Packages/NettworkCore/Sources/WorkspaceChangeControl/WorkspaceRecordType.swift)
+(the full list of synced record types).
 
 ## State ownership
 

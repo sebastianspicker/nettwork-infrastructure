@@ -211,6 +211,24 @@ is not a native app capture.
 
 ## CI coverage
 
+Which workflow runs which checks, and what it produces:
+
+```mermaid
+flowchart LR
+    pr["Dependabot PR or manual run"] --> ci[ci.yml on macOS]
+    ci -->|make verify-source| src[Format, lint, architecture]
+    ci -->|make verify-package| pkg[NettworkCore build]
+    ci -->|make verify-native| native[Unsigned macOS and iOS apps]
+    dispatch[Manual dispatch on main] --> pages[pages.yml on Ubuntu]
+    pages -->|make check-web| site[site/ artifact]
+    site -->|deploy-pages| gh[(GitHub Pages demo)]
+    push[Push, PR, weekly] --> deps[dependency-security.yml]
+```
+
+Nothing builds or ships a signed native app; that stays with the organization.
+Workflows live in [.github/workflows](../.github/workflows), and every `make`
+target is defined in the [Makefile](../Makefile).
+
 The macOS CI workflow selects a full installed Xcode, installs the locked Node
 toolchain with Node 22, installs ShellCheck, shfmt, and XcodeGen, then runs
 `make verify-source`, `make verify-package`, and `make verify-native`. Native
