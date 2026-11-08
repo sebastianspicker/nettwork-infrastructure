@@ -97,7 +97,7 @@ public enum CSVWorkspaceExporter {
             let rows =
                 [template.columns]
                 + tableRecords.map { record in
-                    template.columns.map { record.values[$0] ?? "" }
+                    template.columns.map { Self.crlfLineBreaks(record.values[$0] ?? "") }
                 }
             try validate(rows: rows)
             let bytes = CSVExport.encode(rows: rows)
@@ -300,9 +300,20 @@ public enum CSVWorkspaceExporter {
             }
         }
     }
+    /// The importer accepts only CRLF inside quoted cells (bare LF / lone CR are rejected on
+    /// purpose), so every line break in a cell is written as CRLF; the text itself is kept.
+    static func crlfLineBreaks(_ value: String) -> String {
+        guard value.utf8.contains(where: { $0 == 0x0D || $0 == 0x0A }) else { return value }
+        return value.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(of: "\n", with: "\r\n")
+    }
     private static func id(_ value: ObjectID) -> String { value.description }
     private static func optionalID(_ value: ObjectID?) -> String { value.map(id) ?? "" }
-    private static func date(_ value: Date?) -> String { value.map { ISO8601DateFormatter().string(from: $0) } ?? "" }
+    private static func date(_ value: Date?) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return value.map { formatter.string(from: $0) } ?? ""
+    }
     private static func number(_ value: Double) throws -> String {
         guard value.isFinite else { throw CSVWorkspaceExportError.nonFiniteNumber(String(value)) }
         return String(value)

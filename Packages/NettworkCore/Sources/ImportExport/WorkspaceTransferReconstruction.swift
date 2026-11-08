@@ -331,7 +331,10 @@ public enum WorkspaceTransferRecordReconstruction {
 
     private static func optionalDate(_ record: ImportRecord, _ field: String) throws -> Date? {
         guard let value = try optional(record, field) else { return nil }
-        guard let result = ISO8601DateFormatter().date(from: value) else {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        // Exports carry milliseconds; whole-second dates (older exports, other tools) stay valid.
+        guard let result = fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value) else {
             throw WorkspaceTransferRecordError.invalidDate(table: record.table, field: field, value: value)
         }
         return result
