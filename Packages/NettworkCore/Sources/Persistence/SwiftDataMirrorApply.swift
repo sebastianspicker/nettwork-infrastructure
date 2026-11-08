@@ -52,7 +52,7 @@ extension SwiftDataPersistenceStore {
         try validateActiveLease(for: namespace)
         let key = PersistenceNamespaceKey.value(for: namespace)
         return try mirrorModels(namespaceKey: key).map { try decodeMirror($0, namespace: namespace) }
-            .filter { try isVisibleToFeatureProjection($0, in: namespace) }
+            .filter(try featureProjectionVisibility(in: namespace))
             .sorted { $0.resourceKey < $1.resourceKey }
     }
 
@@ -79,9 +79,8 @@ extension SwiftDataPersistenceStore {
         guard sentinels.count == 1, sentinels[0].payload != nil, sentinels[0].exactPrecondition != nil else {
             throw PersistenceStoreError.malformedStoredValue("active workspace sentinel")
         }
-        let visible = try decoded.filter {
-            try $0.resourceKey != sentinelKey && isVisibleToFeatureProjection($0, in: namespace)
-        }
+        let isVisible = try featureProjectionVisibility(in: namespace)
+        let visible = decoded.filter { $0.resourceKey != sentinelKey && isVisible($0) }
         return (visible + sentinels).sorted { $0.resourceKey < $1.resourceKey }
     }
 
@@ -104,7 +103,7 @@ extension SwiftDataPersistenceStore {
         // consume the entire budget and silently hide eligible records.
         return try mirrorModels(namespaceKey: PersistenceNamespaceKey.value(for: namespace))
             .map { try decodeMirror($0, namespace: namespace) }
-            .filter { try isVisibleToFeatureProjection($0, in: namespace) }
+            .filter(try featureProjectionVisibility(in: namespace))
             .sorted { $0.resourceKey < $1.resourceKey }.prefix(limit).map { $0 }
     }
 
@@ -125,7 +124,7 @@ extension SwiftDataPersistenceStore {
             recordType: recordType, fetchLimit: limit + 1)
         guard models.count <= limit else { throw PersistenceStoreError.invalidReadLimit }
         return try models.map { try decodeMirror($0, namespace: namespace) }
-            .filter { try isVisibleToFeatureProjection($0, in: namespace) }
+            .filter(try featureProjectionVisibility(in: namespace))
             .sorted { $0.resourceKey < $1.resourceKey }
     }
 
@@ -159,7 +158,7 @@ extension SwiftDataPersistenceStore {
                 throw PersistenceStoreError.invalidReadLimit
             }
             let visible = try models.map { try decodeMirror($0, namespace: namespace) }
-                .filter { try isVisibleToFeatureProjection($0, in: namespace) }
+                .filter(try featureProjectionVisibility(in: namespace))
             guard visible.count <= limitPerType else {
                 throw PersistenceStoreError.invalidReadLimit
             }

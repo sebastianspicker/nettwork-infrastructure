@@ -45,8 +45,11 @@ final class ReconciliationViewModel {
             createdCorrectiveWorkOrderID = id
             await onStagedWorkOrder(id)
             await refresh()
-            errorMessage = nil
         } catch { errorMessage = error.localizedDescription }
+    }
+
+    func dismissError() {
+        errorMessage = nil
     }
 }
 
@@ -79,43 +82,46 @@ struct ReconciliationScreen: View {
                     )
                 }
             } else {
-                ForEach(model.comparisons) { comparison in
-                    Section {
-                        Text("Review the difference below before staging a corrective work order.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        LabeledContent("Base", value: comparison.baseSummary)
-                        LabeledContent("Intended", value: comparison.intendedSummary)
-                        LabeledContent("Current", value: comparison.currentSummary)
-                        if comparison.isSecurityEvent {
-                            NettworkNotice(
-                                "Security-sensitive reconciliation",
-                                message: "Review this comparison carefully before staging corrective work.",
-                                style: .critical
-                            )
-                        }
-                        Button("Create corrective work order") {
-                            Task { await model.createCorrectiveWorkOrder(for: comparison, authorization: authorization) }
-                        }
-                        .disabled(!authorization.permitsPrivilegedAction || model.isCreating)
-                        .accessibilityIdentifier("reconciliation.corrective-work-order.\(comparison.id)")
-                    } header: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(comparison.title)
-                            Text(comparison.reason).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
+                ForEach(model.comparisons, content: comparisonSection)
             }
         }
         .navigationTitle("Reconciliation")
         .task { await model.refresh() }
+        .errorAlert("Reconciliation unavailable", message: model.errorMessage) { model.dismissError() }
         .safeAreaInset(edge: .bottom) {
             if let id = model.createdCorrectiveWorkOrderID {
                 Label("Corrective work order \(id.description) created", systemImage: "checkmark.seal")
                     .font(.footnote)
                     .padding()
                     .background(.thinMaterial, in: Capsule())
+            }
+        }
+    }
+
+    private func comparisonSection(_ comparison: ReconciliationComparison) -> some View {
+        Section {
+            Text("Review the difference below before staging a corrective work order.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            LabeledContent("Base", value: comparison.baseSummary)
+            LabeledContent("Intended", value: comparison.intendedSummary)
+            LabeledContent("Current", value: comparison.currentSummary)
+            if comparison.isSecurityEvent {
+                NettworkNotice(
+                    "Security-sensitive reconciliation",
+                    message: "Review this comparison carefully before staging corrective work.",
+                    style: .critical
+                )
+            }
+            Button("Create corrective work order") {
+                Task { await model.createCorrectiveWorkOrder(for: comparison, authorization: authorization) }
+            }
+            .disabled(!authorization.permitsPrivilegedAction || model.isCreating)
+            .accessibilityIdentifier("reconciliation.corrective-work-order.\(comparison.id)")
+        } header: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(comparison.title)
+                Text(comparison.reason).font(.caption).foregroundStyle(.secondary)
             }
         }
     }

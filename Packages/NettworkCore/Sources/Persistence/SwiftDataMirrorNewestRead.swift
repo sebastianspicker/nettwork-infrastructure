@@ -56,7 +56,7 @@ extension SwiftDataPersistenceStore {
         var visible: [LocalMirrorRecord] = []
         while visible.count < limit {
             let page = try modelContext.fetch(descriptor)
-            visible += try page.map { try decodeMirror($0, namespace: namespace) }.filter { try isVisibleToFeatureProjection($0, in: namespace) }
+            visible += try page.map { try decodeMirror($0, namespace: namespace) }.filter(try featureProjectionVisibility(in: namespace))
             guard page.count == limit else { break }
             descriptor.fetchOffset = (descriptor.fetchOffset ?? 0) + limit
         }

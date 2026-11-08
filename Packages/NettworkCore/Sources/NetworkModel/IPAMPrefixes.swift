@@ -161,6 +161,29 @@ public struct Prefix: Identifiable, Codable, Hashable, Sendable {
         state = .active
         tombstonedAt = nil
     }
+    /// `utilization(addresses:)` for many prefixes at once. Addresses are sorted once per VRF and
+    /// each prefix reads only the contiguous run between its bounds, instead of scanning every address.
+    public static func utilizations(_ prefixes: [Prefix], addresses: [IPAddressRecord]) -> [ObjectID: PrefixUtilization] {
+        let sortedByVRF = Dictionary(grouping: addresses.filter(\.isActive), by: \.vrfID).mapValues { $0.sorted { $0.address < $1.address } }
+        var result: [ObjectID: PrefixUtilization] = [:]
+        for prefix in prefixes {
+            let sorted = sortedByVRF[prefix.vrfID, default: []]
+            let start = firstIndex(in: sorted) { !($0.address < prefix.lowerBound) }
+            let end = firstIndex(in: sorted) { prefix.upperBound < $0.address }
+            result[prefix.id] = prefix.utilization(addresses: start < end ? Array(sorted[start..<end]) : [])
+        }
+        return result
+    }
+    /// Binary search: the first index whose element satisfies `isAfter` (which must be monotonic over `sorted`).
+    private static func firstIndex(in sorted: [IPAddressRecord], where isAfter: (IPAddressRecord) -> Bool) -> Int {
+        var low = 0
+        var high = sorted.count
+        while low < high {
+            let middle = (low + high) / 2
+            if isAfter(sorted[middle]) { high = middle } else { low = middle + 1 }
+        }
+        return low
+    }
     private func mergedReservedRanges() -> [ReservedAddressRange] {
         reservedRanges.sorted { $0.lowerBound < $1.lowerBound }.reduce(into: []) { result, range in
             guard let previous = result.last, previous.overlaps(range) else {

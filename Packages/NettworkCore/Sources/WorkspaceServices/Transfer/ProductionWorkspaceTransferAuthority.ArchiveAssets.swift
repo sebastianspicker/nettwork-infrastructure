@@ -76,6 +76,7 @@ extension ProductionWorkspaceTransferAuthority {
             asset.contentType == binding.assetMetadata.contentType,
             asset.byteCount == binding.assetMetadata.byteCount,
             asset.sha256 == binding.assetMetadata.sha256,
+            Self.isJPEG(assetPayload.bytes),
             AttachmentEvidenceBindingRecord.evidenceDigest(for: assetPayload.bytes) == binding.provenance.domainSeparatedSHA256
         else {
             throw ProductionWorkspaceTransferAuthorityError.invalidArchiveAsset
@@ -98,7 +99,8 @@ extension ProductionWorkspaceTransferAuthority {
         guard asset.id == binding.assetMetadata.id,
             asset.contentType == binding.assetMetadata.contentType,
             asset.byteCount == binding.assetMetadata.byteCount,
-            asset.sha256 == binding.assetMetadata.sha256
+            asset.sha256 == binding.assetMetadata.sha256,
+            Self.isJPEG(assetPayload.bytes)
         else {
             throw ProductionWorkspaceTransferAuthorityError.invalidArchiveAsset
         }
@@ -171,6 +173,10 @@ extension ProductionWorkspaceTransferAuthority {
             changeTag: ""
         )
     }
+
+    /// Bound assets were sanitized to JPEG at intake; an archive's own hashes and type
+    /// strings prove nothing about that (it can be hand-built), so check the bytes.
+    static func isJPEG(_ bytes: Data) -> Bool { bytes.starts(with: [0xFF, 0xD8, 0xFF]) }
 
     static func attachmentEvidenceAssetPath(for attachmentID: ObjectID) -> String {
         attachmentEvidenceAssetsDirectory + "/" + attachmentID.description + ".jpg"

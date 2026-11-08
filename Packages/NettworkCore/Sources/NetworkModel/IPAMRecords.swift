@@ -185,33 +185,6 @@ public enum IPAMLifecycleError: Error, Hashable, Sendable {
     case recordAlreadyActive(String)
 }
 
-public struct AddressReassignmentResult: Codable, Hashable, Sendable {
-    public var address: IPAddressRecord
-    public var assignments: [IPAddressAssignment]
-    public init(address: IPAddressRecord, assignments: [IPAddressAssignment]) {
-        self.address = address
-        self.assignments = assignments
-    }
-}
-
-/// Reassignment tombstones the prior active relationship and creates the next one atomically in the returned value.
-public enum IPAMAddressLifecycle {
-    public static func reassign(address: IPAddressRecord, assignments: [IPAddressAssignment], to interface: Interface?, at date: Date = .now) throws
-        -> AddressReassignmentResult
-    {
-        guard address.isActive else { throw IPAMLifecycleError.tombstonedRecord(address.id) }
-        if let interface, !interface.isActive { throw IPAMLifecycleError.tombstonedRecord(interface.id.description) }
-        var updatedAssignments = assignments
-        for index in updatedAssignments.indices where updatedAssignments[index].isActive && updatedAssignments[index].addressID == address.id {
-            updatedAssignments[index].tombstone(at: date)
-        }
-        var updatedAddress = address
-        updatedAddress.assignedInterfaceID = interface?.id
-        if let interface { updatedAssignments.append(IPAddressAssignment(addressID: address.id, interfaceID: interface.id, isPrimary: true)) }
-        return AddressReassignmentResult(address: updatedAddress, assignments: updatedAssignments)
-    }
-}
-
 public enum IPAMValidationError: Error, Hashable, Sendable {
     case invalidPrefix(ObjectID)
     case duplicatePrefix(Prefix, Prefix)

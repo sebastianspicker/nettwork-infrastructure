@@ -292,9 +292,15 @@
         search.close();
         $("#global-search").blur();
       }
-      if (event.key.toLowerCase() === "i" && !/input|textarea/i.test(document.activeElement.tagName))
-        $("#inspector-toggle").click();
+      if (isInspectorShortcut(event)) $("#inspector-toggle").click();
     });
+  }
+
+  // A bare "i" outside text entry; Cmd/Ctrl/Alt combinations (Cmd+I, devtools) stay with the browser.
+  function isInspectorShortcut(event) {
+    const target = document.activeElement;
+    if (event.ctrlKey || event.metaKey || event.altKey || target.isContentEditable) return false;
+    return event.key.toLowerCase() === "i" && !/input|textarea|select/i.test(target.tagName);
   }
 
   function bindEvents() {

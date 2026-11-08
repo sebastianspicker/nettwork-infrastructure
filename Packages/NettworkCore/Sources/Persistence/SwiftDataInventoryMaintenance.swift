@@ -36,17 +36,19 @@ extension SwiftDataPersistenceStore {
         _ record: LocalMirrorRecord, in namespace: PersistenceNamespace
     ) throws -> Bool {
         guard !isInfrastructureRecordType(record.recordType) else { return false }
-        switch record.visibility {
-        case .live:
-            guard case .active = try workspaceVisibilityState(in: namespace).lifecycle else {
-                return false
+        return try featureProjectionVisibility(in: namespace)(record)
+    }
+
+    /// Reads the workspace lifecycle once; filtering many records with the
+    /// single-record check would fetch and decode it again for every row.
+    func featureProjectionVisibility(in namespace: PersistenceNamespace) throws -> (LocalMirrorRecord) -> Bool {
+        let lifecycle = try workspaceVisibilityState(in: namespace).lifecycle
+        return { [self] record in
+            guard !isInfrastructureRecordType(record.recordType), case let .active(commit) = lifecycle else { return false }
+            switch record.visibility {
+            case .live: return true
+            case let .staged(transferID): return commit.transferID == transferID
             }
-            return true
-        case let .staged(transferID):
-            guard case let .active(commit) = try workspaceVisibilityState(in: namespace).lifecycle else {
-                return false
-            }
-            return commit.transferID == transferID
         }
     }
 
@@ -106,10 +108,8 @@ extension SwiftDataPersistenceStore {
         _ changedRecords: [LocalMirrorRecord],
         snapshot: InventoryProjectionSnapshot, in namespace: PersistenceNamespace
     ) throws {
-        let visibleChangedRecords = try changedRecords.filter {
-            if $0.isTombstone { return false }
-            return try isVisibleToFeatureProjection($0, in: namespace)
-        }
+        let isVisible = try featureProjectionVisibility(in: namespace)
+        let visibleChangedRecords = changedRecords.filter { !$0.isTombstone && isVisible($0) }
         var dirtyKeys = snapshot.oldClosure
         let seeds = try InventorySearchIndexBuilder.directDependencySeeds(changedRecords)
         dirtyKeys.formUnion(changedRecords.map { $0.resourceKey.description })

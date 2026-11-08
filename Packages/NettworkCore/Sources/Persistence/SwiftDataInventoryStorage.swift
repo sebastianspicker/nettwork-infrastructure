@@ -56,8 +56,9 @@ extension SwiftDataPersistenceStore {
                 .filter { derivedNodeKeys.contains($0.resourceKey) }
                 .map { ($0.resourceKey.description, $0) }, uniquingKeysWith: { current, _ in current })
         var nodeDelta = 0
+        let isVisible = try featureProjectionVisibility(in: namespace)
         for record in changedRecords where !record.isTombstone {
-            if try isVisibleToFeatureProjection(record, in: namespace) {
+            if isVisible(record) {
                 replacementNodes[record.resourceKey.description] = record
             } else {
                 replacementNodes.removeValue(forKey: record.resourceKey.description)
@@ -135,7 +136,7 @@ extension SwiftDataPersistenceStore {
     func visibleInventoryMirrorRecords(in namespace: PersistenceNamespace) throws -> [LocalMirrorRecord] {
         try mirrorModels(namespaceKey: PersistenceNamespaceKey.value(for: namespace))
             .map { try decodeMirror($0, namespace: namespace) }
-            .filter { try isVisibleToFeatureProjection($0, in: namespace) }
+            .filter(try featureProjectionVisibility(in: namespace))
     }
 
     func inventorySearchStorageKey(

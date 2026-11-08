@@ -104,9 +104,10 @@ final class FileBackedVerifiedArchiveStorage: @unchecked Sendable {
             throw FileBackedStagingError.invalidRoot
         }
         try FileBackedStagingFiles.ensurePrivateDirectory(destination.deletingLastPathComponent())
-        // The durable restore store owns the adopted copy; it must not carry the sweep marker.
-        try? FileManager.default.removeItem(at: source.appendingPathComponent(StagingSweep.markerName))
         try FileManager.default.moveItem(at: source, to: destination)
+        // The durable restore store owns the adopted copy; it must not carry the sweep marker.
+        // Removed only after the move, so a failed move leaves the source sweepable.
+        try? FileManager.default.removeItem(at: destination.appendingPathComponent(StagingSweep.markerName))
         root = destination.standardizedFileURL
         adopted = true
     }

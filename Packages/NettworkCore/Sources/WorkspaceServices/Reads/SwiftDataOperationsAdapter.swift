@@ -154,10 +154,7 @@ public final class SwiftDataOperationsAdapter: OperationsFeatureService, Operati
             return acknowledgement.expiresAt <= now
         }
         let statusCounts = Dictionary(grouping: projection.workOrders, by: \.status).mapValues(\.count)
-        let activeAddressesByVRF = Dictionary(grouping: projection.addresses.filter(\.isActive), by: \.vrfID)
-        let prefixUtilization = projection.prefixes.filter(\.isActive).map { prefix in
-            prefix.utilization(addresses: activeAddressesByVRF[prefix.vrfID, default: []])
-        }
+        let prefixUtilization = Array(Prefix.utilizations(projection.prefixes.filter(\.isActive), addresses: projection.addresses).values)
         let averagePrefixUse = prefixUtilization.isEmpty ? 0 : prefixUtilization.map(\.consumedFraction).reduce(0, +) / Double(prefixUtilization.count)
         let activeVLANs = projection.vlans.filter(\.isActive)
         let activeAssignments = projection.assignments.filter(\.isActive)

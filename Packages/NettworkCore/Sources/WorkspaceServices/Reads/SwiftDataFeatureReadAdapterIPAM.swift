@@ -22,8 +22,10 @@ extension SwiftDataFeatureReadAdapter {
 
     public func prefixes(in namespace: PersistenceNamespace) async throws -> [IPAMPrefixSnapshot] {
         let projection = try await readProjection(in: namespace)
-        return projection.prefixes.filter(\.isActive).map { prefix in
-            let utilization = prefix.utilization(addresses: projection.addresses).consumedFraction
+        let active = projection.prefixes.filter(\.isActive)
+        let utilizations = Prefix.utilizations(active, addresses: projection.addresses)
+        return active.map { prefix in
+            let utilization = utilizations[prefix.id]?.consumedFraction ?? 0
             let flags = projection.workflowFlags(for: .object(prefix.id))
             return IPAMPrefixSnapshot(
                 value: prefix,

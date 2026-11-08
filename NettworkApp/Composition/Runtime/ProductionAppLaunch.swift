@@ -219,6 +219,8 @@ final class ProductionAppLaunchController {
     }
 
     private func performStop() async {
+        // Links arriving during shutdown wait for the next runtime's router.
+        isAwaitingRuntime = true
         accountChanges.stop()
         await dependencies.shutdown()
         assembly = nil

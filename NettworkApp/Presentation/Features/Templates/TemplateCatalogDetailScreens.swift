@@ -252,12 +252,12 @@ struct TemplateCSVPreview: View {
         .accessibilityHint("Shows the bounded RFC 4180 preview for this template.")
     }
 
+    /// One encoded line per row; splitting the joined text fails because "\r\n" is a single Character.
     private static func render(schema: CSVTemplate, values: [String]) -> [String] {
-        let data = CSVExport.encode(rows: [schema.columns, values])
-        return String(decoding: data.prefix(16 * 1024), as: UTF8.self)
-            .split(separator: "\n", omittingEmptySubsequences: true)
-            .prefix(2)
-            .map { String($0) }
+        [schema.columns, values].map { row in
+            let line = String(data: CSVExport.encode(rows: [row]).dropLast(2), encoding: .utf8) ?? ""
+            return String(line.prefix(16 * 1024))
+        }
     }
 
     private static func json<T: Encodable>(_ value: T) -> String {

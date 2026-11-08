@@ -64,6 +64,8 @@ final class ScanIntakeModel {
 
     private var wedgeBuffer = ""
     private var shouldResumeCapture = false
+    /// Bumped by cancel/suspend so a camera start that finishes afterwards is undone.
+    private var captureGeneration = 0
     private var resolutionAttempt = 0
 
     init(
@@ -88,8 +90,11 @@ final class ScanIntakeModel {
         destination = nil
         captureLifecycle = .requestingPermission
         captureAvailability = .checking
+        captureGeneration &+= 1
+        let generation = captureGeneration
         let availability = await capture.requestPermission()
         captureAvailability = availability
+        guard generation == captureGeneration else { return }
         guard availability.canStart else {
             shouldResumeCapture = false
             captureLifecycle = .inactive
@@ -112,6 +117,7 @@ final class ScanIntakeModel {
     }
 
     func cancel() async {
+        captureGeneration &+= 1
         invalidateResolutionAttempts(resetState: true)
         shouldResumeCapture = false
         wedgeBuffer = ""
@@ -123,11 +129,23 @@ final class ScanIntakeModel {
         switch phase {
         case .active:
             await resume()
-        case .inactive, .background:
+        case .inactive:
+            // Not an abort point: the camera permission prompt itself makes the scene inactive.
+            await suspend()
+        case .background:
+            abortStartInProgress()
             await suspend()
         @unknown default:
             break
         }
+    }
+
+    /// A start still awaiting permission or the camera is dropped; the user starts again on return.
+    private func abortStartInProgress() {
+        guard captureLifecycle == .requestingPermission else { return }
+        captureGeneration &+= 1
+        shouldResumeCapture = false
+        captureLifecycle = .inactive
     }
 
     func submitManual() async {
@@ -141,6 +159,12 @@ final class ScanIntakeModel {
         guard isTerminator else { return }
         defer { wedgeBuffer = "" }
         await accept(wedgeBuffer)
+    }
+
+    /// Camera delivery. The gate re-delivers a code in view every 2 s; the running lookup for it must finish.
+    func acceptCameraCode(_ objectID: ObjectID) async {
+        guard resolutionState != .resolving(objectID) else { return }
+        await accept(ObjectLink.url(for: objectID).absoluteString)
     }
 
     func accept(_ rawValue: String) async {
@@ -181,11 +205,17 @@ final class ScanIntakeModel {
     }
 
     private func startCapture() async {
+        let generation = captureGeneration
         do {
             try await capture.start()
+            guard generation == captureGeneration else {
+                await capture.stop()
+                return
+            }
             shouldResumeCapture = true
             captureLifecycle = .ready
         } catch {
+            guard generation == captureGeneration else { return }
             shouldResumeCapture = false
             captureLifecycle = .inactive
             captureAvailability = .unavailable(

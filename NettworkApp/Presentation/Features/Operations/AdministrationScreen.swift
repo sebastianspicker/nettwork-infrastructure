@@ -140,17 +140,7 @@ struct AdministrationScreen: View {
         } message: {
             Text("This closes the current workspace session and clears its ephemeral local state.")
         }
-        .alert(
-            "Workspace administration unavailable",
-            isPresented: Binding(
-                get: { model.errorMessage != nil },
-                set: { if !$0 { model.dismissError() } }
-            )
-        ) {
-            Button("OK", role: .cancel) { model.dismissError() }
-        } message: {
-            Text(model.errorMessage ?? "")
-        }
+        .errorAlert("Workspace administration unavailable", message: model.errorMessage) { model.dismissError() }
     }
 
     @ViewBuilder private var participantSection: some View {

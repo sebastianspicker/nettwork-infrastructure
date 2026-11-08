@@ -125,7 +125,7 @@ final class ScanModelRelay {
 
     func receive(_ objectID: ObjectID) {
         Task {
-            await model?.accept(ObjectLink.url(for: objectID).absoluteString)
+            await model?.acceptCameraCode(objectID)
         }
     }
 }

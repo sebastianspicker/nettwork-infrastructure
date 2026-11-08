@@ -155,7 +155,8 @@ public enum CSVExport {
 
     private static func encodeCell(_ raw: String) -> String {
         let value = escapedCell(raw)
-        guard value.contains(",") || value.contains("\"") || value.contains("\r") || value.contains("\n") else { return value }
+        // Bytes, not Characters: "\r\n" is one Character and would not match "\r" or "\n".
+        guard value.utf8.contains(where: { [0x2C, 0x22, 0x0D, 0x0A].contains($0) }) else { return value }
         return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 }

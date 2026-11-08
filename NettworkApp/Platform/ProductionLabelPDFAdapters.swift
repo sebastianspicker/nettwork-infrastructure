@@ -180,7 +180,13 @@ final class ProductionLabelPDFGenerator: @unchecked Sendable, LabelPDFGenerating
             throw PlatformLabelPDFError.renderingUnavailable
         }
         context.interpolationQuality = .none
-        context.draw(rendered, in: CGRect(x: rect.minX, y: rect.minY, width: moduleSize * scale, height: moduleSize * scale))
+        let imageRect = CGRect(x: rect.minX, y: rect.minY, width: moduleSize * scale, height: moduleSize * scale)
+        // The page is flipped (y down); flip back locally so the code is not mirrored.
+        context.saveGState()
+        context.translateBy(x: 0, y: imageRect.minY + imageRect.maxY)
+        context.scaleBy(x: 1, y: -1)
+        context.draw(rendered, in: imageRect)
+        context.restoreGState()
     }
 
     private func drawText(_ string: String, at point: CGPoint, width: CGFloat, size: CGFloat, context: CGContext) {
@@ -192,6 +198,8 @@ final class ProductionLabelPDFGenerator: @unchecked Sendable, LabelPDFGenerating
         let line = CTLineCreateWithAttributedString(NSAttributedString(string: string, attributes: attributes))
         context.saveGState()
         context.clip(to: CGRect(x: point.x, y: point.y - size, width: width, height: size + 4))
+        // The page is flipped (y down); without this glyphs render upside down below the baseline.
+        context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
         context.textPosition = point
         CTLineDraw(line, context)
         context.restoreGState()
