@@ -2,3 +2,5 @@
 exclude_paths:
   - "package-lock.json"
   - "**/package-lock.json"
+  # Frozen SwiftData VersionedSchema snapshots: copies of shipped models by design.
+  - "Packages/NettworkCore/Sources/Persistence/PersistenceSchemaHistory*.swift"
