@@ -28,7 +28,7 @@ extension MirrorProjection {
                 title: device.name,
                 subtitle: device.assetCode.value,
                 siteName: siteName(for: device.id),
-                searchTerms: customFieldSearchTerms(device.customFields) + context + [device.typeID.description],
+                searchTerms: device.customFields.flatMap(\.searchTerms) + context + [device.typeID.description],
                 isTombstoned: tombstoned.contains(device.id),
                 isPending: hasPendingWork(for: .object(device.id)),
                 isConflicted: hasConflict(for: .object(device.id))
@@ -42,7 +42,7 @@ extension MirrorProjection {
                 title: port.label,
                 subtitle: portStates[port.id]?.rawValue ?? "unavailable",
                 siteName: siteName(for: port.id),
-                searchTerms: customFieldSearchTerms(port.customFields) + context + [
+                searchTerms: port.customFields.flatMap(\.searchTerms) + context + [
                     port.deviceID.description, port.medium.rawValue,
                     port.connector.rawValue, port.face.rawValue,
                 ],
@@ -194,19 +194,6 @@ extension MirrorProjection {
                 }
             }
             return ["\(interface.name) · \(interface.kind.rawValue) · \(interface.mode.rawValue)"] + interfaceAddresses + vlanDescriptions
-        }
-    }
-
-    private func customFieldSearchTerms(_ fields: [CustomFieldValue]) -> [String] {
-        fields.flatMap { field in
-            let value: String
-            switch field.value {
-            case .text(let text): value = text
-            case .number(let number): value = String(number)
-            case .flag(let flag): value = String(flag)
-            case .date(let date): value = String(date.timeIntervalSince1970)
-            }
-            return [field.key, value]
         }
     }
 

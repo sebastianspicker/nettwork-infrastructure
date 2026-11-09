@@ -57,7 +57,7 @@ struct InventorySearchRecordBuilder {
             records.append(
                 makeRecord(
                     device.id, resourceKey: .object(device.id), kind: "device", title: device.name, subtitle: device.assetCode.value,
-                    searchTerms: InventorySearchIndexBuilder.customFields(device.customFields) + [device.typeID.description],
+                    searchTerms: device.customFields.flatMap(\.searchTerms) + [device.typeID.description],
                     isPending: pendingWorkKeys.contains(.object(device.id))))
         }
         for port in projection.topology.ports where !tombstoned.contains(port.id) {
@@ -65,7 +65,7 @@ struct InventorySearchRecordBuilder {
             records.append(
                 makeRecord(
                     port.id, resourceKey: .object(port.id), kind: "port", title: port.label, subtitle: portStates[port.id, default: .unavailable].rawValue,
-                    searchTerms: InventorySearchIndexBuilder.customFields(port.customFields) + [
+                    searchTerms: port.customFields.flatMap(\.searchTerms) + [
                         port.deviceID.description, port.medium.rawValue, port.connector.rawValue, port.face.rawValue,
                     ], isPending: pending))
         }

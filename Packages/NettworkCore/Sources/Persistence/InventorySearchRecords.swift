@@ -13,19 +13,6 @@ extension InventorySearchIndexBuilder {
         return result
     }
 
-    static func customFields(_ fields: [CustomFieldValue]) -> [String] {
-        fields.flatMap { field in
-            let value: String
-            switch field.value {
-            case .text(let text): value = text
-            case .number(let number): value = String(number)
-            case .flag(let flag): value = String(flag)
-            case .date(let date): value = String(date.timeIntervalSince1970)
-            }
-            return [field.key, value]
-        }
-    }
-
     static func stableObjectID(_ string: String) -> ObjectID {
         let hex = SHA256.hash(data: Data(string.utf8)).map { String(format: "%02x", $0) }.joined()
         let value =

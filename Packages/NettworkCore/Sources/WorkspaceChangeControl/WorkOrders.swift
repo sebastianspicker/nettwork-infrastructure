@@ -34,6 +34,23 @@ public struct IntentDigest: Codable, Hashable, Sendable {
     public var hexadecimalString: String { bytes.map { String(format: "%02x", $0) }.joined() }
 }
 
+extension Data {
+    /// Decodes hexadecimal text (either case); nil for an odd length or a non-hex character.
+    public init?(hexadecimalString: String) {
+        guard hexadecimalString.count.isMultiple(of: 2) else { return nil }
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(hexadecimalString.count / 2)
+        var index = hexadecimalString.startIndex
+        while index < hexadecimalString.endIndex {
+            let next = hexadecimalString.index(index, offsetBy: 2)
+            guard let byte = UInt8(hexadecimalString[index..<next], radix: 16) else { return nil }
+            bytes.append(byte)
+            index = next
+        }
+        self.init(bytes)
+    }
+}
+
 public enum IntentDigestError: Error, Hashable, Sendable {
     case invalidLength(algorithm: IntentDigest.Algorithm, actual: Int)
     case invalidSchemaVersion(Int)

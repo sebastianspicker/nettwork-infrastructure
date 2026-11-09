@@ -1,6 +1,6 @@
 import Foundation
 
-public struct IPAddressRecord: Identifiable, Codable, Hashable, Sendable {
+public struct IPAddressRecord: IPAMLifecycleRecord, Codable, Hashable, Sendable {
     /// CloudKit-compatible deterministic record name, not a mutable display label.
     public let id: String
     public var vrfID: ObjectID
@@ -18,7 +18,6 @@ public struct IPAddressRecord: Identifiable, Codable, Hashable, Sendable {
         self.tombstonedAt = tombstonedAt
     }
     public var recordName: String { id }
-    public var isActive: Bool { state == .active }
     public static func deterministicID(vrfID: ObjectID, address: IPAddress) -> String { deterministicRecordName(vrfID: vrfID, address: address) }
     public static func deterministicRecordName(vrfID: ObjectID, address: IPAddress) -> String { "ip:\(vrfID.description):\(address.description)" }
     public mutating func tombstone(at date: Date = .now) {
@@ -26,13 +25,8 @@ public struct IPAddressRecord: Identifiable, Codable, Hashable, Sendable {
         tombstonedAt = date
         assignedInterfaceID = nil
     }
-    public mutating func reactivate() throws {
-        guard state == .tombstoned else { throw IPAMLifecycleError.recordAlreadyActive(id) }
-        state = .active
-        tombstonedAt = nil
-    }
 }
-public struct VLANGroup: Identifiable, Codable, Hashable, Sendable {
+public struct VLANGroup: IPAMLifecycleRecord, Codable, Hashable, Sendable {
     public let id: ObjectID
     public var name: String
     public var state: IPAMRecordState
@@ -43,19 +37,9 @@ public struct VLANGroup: Identifiable, Codable, Hashable, Sendable {
         self.state = state
         self.tombstonedAt = tombstonedAt
     }
-    public var isActive: Bool { state == .active }
-    public mutating func tombstone(at date: Date = .now) {
-        state = .tombstoned
-        tombstonedAt = date
-    }
-    public mutating func reactivate() throws {
-        guard state == .tombstoned else { throw IPAMLifecycleError.recordAlreadyActive(id.description) }
-        state = .active
-        tombstonedAt = nil
-    }
 }
 
-public struct VLAN: Identifiable, Codable, Hashable, Sendable {
+public struct VLAN: IPAMLifecycleRecord, Codable, Hashable, Sendable {
     public let id: ObjectID
     public var groupID: ObjectID
     public var number: Int
@@ -70,22 +54,12 @@ public struct VLAN: Identifiable, Codable, Hashable, Sendable {
         self.state = state
         self.tombstonedAt = tombstonedAt
     }
-    public var isActive: Bool { state == .active }
-    public mutating func tombstone(at date: Date = .now) {
-        state = .tombstoned
-        tombstonedAt = date
-    }
-    public mutating func reactivate() throws {
-        guard state == .tombstoned else { throw IPAMLifecycleError.recordAlreadyActive(id.description) }
-        state = .active
-        tombstonedAt = nil
-    }
 }
 
 public enum InterfaceMode: String, Codable, Hashable, Sendable { case access, trunk, routed }
 public enum InterfaceKind: String, Codable, Hashable, Sendable { case physical, loopback, vlan }
 
-public struct Interface: Identifiable, Codable, Hashable, Sendable {
+public struct Interface: IPAMLifecycleRecord, Codable, Hashable, Sendable {
     public let id: ObjectID
     public var deviceID: ObjectID
     public var physicalPortID: ObjectID?
@@ -110,19 +84,9 @@ public struct Interface: Identifiable, Codable, Hashable, Sendable {
         self.state = state
         self.tombstonedAt = tombstonedAt
     }
-    public var isActive: Bool { state == .active }
-    public mutating func tombstone(at date: Date = .now) {
-        state = .tombstoned
-        tombstonedAt = date
-    }
-    public mutating func reactivate() throws {
-        guard state == .tombstoned else { throw IPAMLifecycleError.recordAlreadyActive(id.description) }
-        state = .active
-        tombstonedAt = nil
-    }
 }
 
-public struct IPAddressAssignment: Identifiable, Codable, Hashable, Sendable {
+public struct IPAddressAssignment: IPAMLifecycleRecord, Codable, Hashable, Sendable {
     public let id: ObjectID
     public var addressID: String
     public var interfaceID: ObjectID
@@ -139,19 +103,9 @@ public struct IPAddressAssignment: Identifiable, Codable, Hashable, Sendable {
         self.state = state
         self.tombstonedAt = tombstonedAt
     }
-    public var isActive: Bool { state == .active }
-    public mutating func tombstone(at date: Date = .now) {
-        state = .tombstoned
-        tombstonedAt = date
-    }
-    public mutating func reactivate() throws {
-        guard state == .tombstoned else { throw IPAMLifecycleError.recordAlreadyActive(id.description) }
-        state = .active
-        tombstonedAt = nil
-    }
 }
 
-public struct InterfaceVLANMembership: Identifiable, Codable, Hashable, Sendable {
+public struct InterfaceVLANMembership: IPAMLifecycleRecord, Codable, Hashable, Sendable {
     public let id: ObjectID
     public var interfaceID: ObjectID
     public var vlanID: ObjectID
@@ -167,16 +121,6 @@ public struct InterfaceVLANMembership: Identifiable, Codable, Hashable, Sendable
         self.isNative = isNative
         self.state = state
         self.tombstonedAt = tombstonedAt
-    }
-    public var isActive: Bool { state == .active }
-    public mutating func tombstone(at date: Date = .now) {
-        state = .tombstoned
-        tombstonedAt = date
-    }
-    public mutating func reactivate() throws {
-        guard state == .tombstoned else { throw IPAMLifecycleError.recordAlreadyActive(id.description) }
-        state = .active
-        tombstonedAt = nil
     }
 }
 

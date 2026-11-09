@@ -306,19 +306,3 @@ public struct AuthorizedAttachmentEvidenceBindingService: Sendable {
             contentType: attachment.contentType.rawValue)
     }
 }
-
-private extension Data {
-    init?(hexadecimalString: String) {
-        guard hexadecimalString.count.isMultiple(of: 2) else { return nil }
-        var bytes = [UInt8]()
-        bytes.reserveCapacity(hexadecimalString.count / 2)
-        var index = hexadecimalString.startIndex
-        while index < hexadecimalString.endIndex {
-            let next = hexadecimalString.index(index, offsetBy: 2)
-            guard let byte = UInt8(hexadecimalString[index..<next], radix: 16) else { return nil }
-            bytes.append(byte)
-            index = next
-        }
-        self.init(bytes)
-    }
-}

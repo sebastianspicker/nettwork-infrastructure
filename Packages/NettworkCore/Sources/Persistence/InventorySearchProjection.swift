@@ -94,7 +94,7 @@ extension InventorySearchIndexBuilder {
                 }
             }
             var directIDs = Set<ObjectID>()
-            for record in records.filter({ types.contains($0.recordType) }).sorted(by: recordOrder) {
+            for record in records.filter({ types.contains($0.recordType) }).sorted(by: LocalMirrorRecord.replayOrder) {
                 if record.isTombstone {
                     guard case let .object(id) = record.resourceKey,
                         directIDs.insert(id).inserted
@@ -136,9 +136,9 @@ extension InventorySearchIndexBuilder {
                 throw PersistenceStoreError.malformedStoredValue("duplicate rack placement seed")
             }
             var directDeviceIDs = Set<ObjectID>()
-            for record in records.filter({ types.contains($0.recordType) }).sorted(by: recordOrder) {
+            for record in records.filter({ types.contains($0.recordType) }).sorted(by: LocalMirrorRecord.replayOrder) {
                 if record.isTombstone {
-                    guard let deviceID = rackPlacementDeviceID(from: record.resourceKey),
+                    guard let deviceID = record.resourceKey.rackPlacementDeviceID,
                         directDeviceIDs.insert(deviceID).inserted
                     else {
                         throw PersistenceStoreError.invalidMirrorRecord(record.resourceKey)
@@ -157,28 +157,11 @@ extension InventorySearchIndexBuilder {
             return values.values.sorted { $0.deviceID < $1.deviceID }
         }
 
-        private static func rackPlacementDeviceID(from resourceKey: ResourceKey) -> ObjectID? {
-            guard case let .string(value) = resourceKey else { return nil }
-            let prefix = "rack-placement:"
-            guard value.hasPrefix(prefix) else { return nil }
-            let rawID = String(value.dropFirst(prefix.count))
-            guard let uuid = UUID(uuidString: rawID),
-                uuid.uuidString.lowercased() == rawID
-            else { return nil }
-            return ObjectID(uuid)
-        }
-
         static func decode<T: Decodable>(_ type: T.Type, record: LocalMirrorRecord) throws -> T {
             guard let payload = record.payload, payload.count <= 1_048_576 else { throw PersistenceStoreError.invalidMirrorRecord(record.resourceKey) }
             do { return try CanonicalJSONCoding.decode(type, from: payload) } catch {
                 throw PersistenceStoreError.invalidMirrorRecord(record.resourceKey)
             }
-        }
-
-        private static func recordOrder(_ lhs: LocalMirrorRecord, _ rhs: LocalMirrorRecord) -> Bool {
-            if lhs.serverModifiedAt != rhs.serverModifiedAt { return lhs.serverModifiedAt < rhs.serverModifiedAt }
-            if lhs.resourceKey != rhs.resourceKey { return lhs.resourceKey < rhs.resourceKey }
-            return lhs.recordType < rhs.recordType
         }
     }
 }

@@ -2,6 +2,26 @@ import Foundation
 
 public enum IPAMRecordState: String, Codable, Hashable, Sendable { case active, tombstoned }
 
+/// Soft-delete lifecycle shared by IPAM records: a tombstoned record keeps its row for history and sync.
+public protocol IPAMLifecycleRecord: Identifiable where ID: CustomStringConvertible {
+    var state: IPAMRecordState { get set }
+    var tombstonedAt: Date? { get set }
+    mutating func tombstone(at date: Date)
+}
+
+extension IPAMLifecycleRecord {
+    public var isActive: Bool { state == .active }
+    public mutating func tombstone(at date: Date = .now) {
+        state = .tombstoned
+        tombstonedAt = date
+    }
+    public mutating func reactivate() throws {
+        guard state == .tombstoned else { throw IPAMLifecycleError.recordAlreadyActive(id.description) }
+        state = .active
+        tombstonedAt = nil
+    }
+}
+
 public struct ReservedAddressRange: Codable, Hashable, Sendable {
     public var lowerBound: IPAddress
     public var upperBound: IPAddress
@@ -34,7 +54,7 @@ public struct PrefixUtilization: Codable, Hashable, Sendable {
     public var consumedFraction: Double { min(1, reservedFraction + allocatedFraction) }
 }
 
-public struct Prefix: Identifiable, Codable, Hashable, Sendable {
+public struct Prefix: IPAMLifecycleRecord, Codable, Hashable, Sendable {
     public let id: ObjectID
     public var vrfID: ObjectID
     public var network: IPAddress
@@ -129,7 +149,6 @@ public struct Prefix: Identifiable, Codable, Hashable, Sendable {
     public var lowerBound: IPAddress { network }
     public var upperBound: IPAddress { network.upperBound(prefixLength: prefixLength) }
     public var addressCapacityExponent: Int { network.bitWidth - prefixLength }
-    public var isActive: Bool { state == .active }
     public func contains(_ address: IPAddress) -> Bool {
         address.isWellFormed && address.bitWidth == network.bitWidth && address.masked(prefixLength: prefixLength) == network
     }
@@ -151,15 +170,6 @@ public struct Prefix: Identifiable, Codable, Hashable, Sendable {
             return total + size / capacity
         }
         return PrefixUtilization(capacityExponent: addressCapacityExponent, allocatedAddressCount: allocated, reservedFraction: min(1, reserved))
-    }
-    public mutating func tombstone(at date: Date = .now) {
-        state = .tombstoned
-        tombstonedAt = date
-    }
-    public mutating func reactivate() throws {
-        guard state == .tombstoned else { throw IPAMLifecycleError.recordAlreadyActive(id.description) }
-        state = .active
-        tombstonedAt = nil
     }
     /// `utilization(addresses:)` for many prefixes at once. Addresses are sorted once per VRF and
     /// each prefix reads only the contiguous run between its bounds, instead of scanning every address.

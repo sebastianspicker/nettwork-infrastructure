@@ -238,3 +238,25 @@ public struct FloorPlanAnchor: Identifiable, Codable, Hashable, Sendable {
         )
     }
 }
+
+extension ResourceKey {
+    /// The device of a `rackPlacement(deviceID:)` key; nil for any other key or a non-canonical UUID.
+    public var rackPlacementDeviceID: ObjectID? {
+        guard case let .string(value) = self, value.hasPrefix("rack-placement:") else { return nil }
+        let rawID = String(value.dropFirst("rack-placement:".count))
+        guard let uuid = UUID(uuidString: rawID), uuid.uuidString.lowercased() == rawID else { return nil }
+        return ObjectID(uuid)
+    }
+}
+
+extension CustomFieldValue {
+    /// Key and value as inventory search text; the inventory index and the mirror projection must agree on it.
+    public var searchTerms: [String] {
+        switch value {
+        case .text(let text): [key, text]
+        case .number(let number): [key, String(number)]
+        case .flag(let flag): [key, String(flag)]
+        case .date(let date): [key, String(date.timeIntervalSince1970)]
+        }
+    }
+}

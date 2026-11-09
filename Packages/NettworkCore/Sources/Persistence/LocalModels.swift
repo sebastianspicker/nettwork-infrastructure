@@ -40,6 +40,13 @@ public struct LocalMirrorRecord: Codable, Hashable, Sendable {
         self.verifiedAt = verifiedAt
     }
 
+    /// Deterministic order for replaying mirror records into domain values: oldest server change first.
+    public static func replayOrder(_ lhs: LocalMirrorRecord, _ rhs: LocalMirrorRecord) -> Bool {
+        if lhs.serverModifiedAt != rhs.serverModifiedAt { return lhs.serverModifiedAt < rhs.serverModifiedAt }
+        if lhs.resourceKey != rhs.resourceKey { return lhs.resourceKey < rhs.resourceKey }
+        return lhs.recordType < rhs.recordType
+    }
+
     public var exactPrecondition: ExactRecordPrecondition? {
         guard let systemFields, let changeTag, !systemFields.isEmpty,
             !changeTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
